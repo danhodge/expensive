@@ -1,0 +1,19 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Transactions</title>
+  <script src="transactions.js"></script>
+</head>
+
+<body>
+  <div id="elm">
+    <script>
+      var app = Elm.Transactions.init({
+        node: document.getElementById('elm'),
+        flags: { data: "flags" }
+      });
+    </script>
+  </div>
+</body>
+</html>
