@@ -1,7 +1,8 @@
-module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialModel, main, tableRow, toRow, update, view)
+module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialModel, main, tableRow, update, view)
 
 import Browser
 import Html exposing (..)
+import Html.Events exposing (onClick)
 
 
 
@@ -14,7 +15,8 @@ type alias Model =
 
 
 type alias Transaction =
-    { date : String
+    { id : Int
+    , date : String
     , description : String
     }
 
@@ -30,17 +32,12 @@ type alias Flags =
     }
 
 
-toRow : Transaction -> List String
-toRow transaction =
-    [ transaction.date, transaction.description ]
-
-
 initialModel : Model
 initialModel =
     { transactions =
-        [ Transaction "2019-03-01" "Food"
-        , Transaction "2019-03-04" "Gas"
-        , Transaction "2019-03-06" "Pets"
+        [ Transaction 1 "2019-03-01" "Food"
+        , Transaction 2 "2019-03-04" "Gas"
+        , Transaction 3 "2019-03-06" "Pets"
         ]
     }
 
@@ -56,12 +53,14 @@ init flags =
 
 
 type Msg
-    = None
+    = RowClick Int
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
-    ( model, Cmd.none )
+    case message of
+        RowClick id ->
+            ( model, Cmd.none )
 
 
 
@@ -73,13 +72,31 @@ view model =
     table []
         -- there has to be a better way to do this
         ([ tableRow th [ "Date", "Description" ] ]
-            ++ List.map (tableRow td) (List.map toRow model.transactions)
+            ++ transactionRows model.transactions
         )
 
 
 tableRow : (List (Attribute Msg) -> List (Html Msg) -> Html Msg) -> List String -> Html Msg
 tableRow elementType values =
-    tr [] (List.map (\value -> elementType [] [ text value ]) values)
+    tableRowWithAttributes [] elementType values
+
+
+tableRowWithAttributes : List (Attribute Msg) -> (List (Attribute Msg) -> List (Html Msg) -> Html Msg) -> List String -> Html Msg
+tableRowWithAttributes attributes elementType values =
+    tr attributes (List.map (\value -> elementType [] [ text value ]) values)
+
+
+transactionRows : List Transaction -> List (Html Msg)
+transactionRows transactions =
+    List.map transactionRow transactions
+
+
+transactionRow : Transaction -> Html Msg
+transactionRow transaction =
+    tr [ onClick (RowClick transaction.id) ]
+        [ td [] [ text transaction.date ]
+        , td [] [ text transaction.description ]
+        ]
 
 
 
