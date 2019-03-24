@@ -2,6 +2,7 @@ module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialM
 
 import Browser
 import Html exposing (..)
+import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 
 
@@ -18,6 +19,7 @@ type alias Transaction =
     { id : Int
     , date : String
     , description : String
+    , editable : Bool
     }
 
 
@@ -35,9 +37,18 @@ type alias Flags =
 initialModel : Model
 initialModel =
     { transactions =
-        [ Transaction 1 "2019-03-01" "Food"
-        , Transaction 2 "2019-03-04" "Gas"
-        , Transaction 3 "2019-03-06" "Pets"
+        [ Transaction 1
+            "2019-03-01"
+            "Food"
+            False
+        , Transaction 2
+            "2019-03-04"
+            "Gas"
+            False
+        , Transaction 3
+            "2019-03-06"
+            "Pets"
+            False
         ]
     }
 
@@ -60,7 +71,16 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     case message of
         RowClick id ->
-            ( model, Cmd.none )
+            ( { model | transactions = List.map (makeEditable id) model.transactions }, Cmd.none )
+
+
+makeEditable : Int -> Transaction -> Transaction
+makeEditable id transaction =
+    if transaction.id == id && not transaction.editable then
+        { transaction | editable = not transaction.editable }
+
+    else
+        transaction
 
 
 
@@ -95,8 +115,17 @@ transactionRow : Transaction -> Html Msg
 transactionRow transaction =
     tr [ onClick (RowClick transaction.id) ]
         [ td [] [ text transaction.date ]
-        , td [] [ text transaction.description ]
+        , td [] [ transactionDescription transaction ]
         ]
+
+
+transactionDescription : Transaction -> Html Msg
+transactionDescription transaction =
+    if transaction.editable then
+        input [ type_ "text", value transaction.description ] []
+
+    else
+        text transaction.description
 
 
 
