@@ -3,7 +3,8 @@ module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialM
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
+import Html.Events exposing (keyCode, on, onClick, onInput)
+import Json.Decode
 
 
 
@@ -60,27 +61,63 @@ init flags =
 
 
 -- UPDATE
--- dummy message for now
 
 
 type Msg
     = RowClick Int
+    | RowEsc Int
+    | KeyUp Int Int
+    | DescriptionInput Int String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     case message of
+        -- TODO: set focus on click
         RowClick id ->
-            ( { model | transactions = List.map (makeEditable id) model.transactions }, Cmd.none )
+            ( { model | transactions = List.map (toggleEditable False id) model.transactions }, Cmd.none )
+
+        RowEsc id ->
+            ( { model | transactions = List.map (toggleEditable True id) model.transactions }, Cmd.none )
+
+        KeyUp id keyCode ->
+            case keyCode of
+                -- 27 = ESC
+                27 ->
+                    ( { model | transactions = List.map (toggleEditable True id) model.transactions }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        DescriptionInput id text ->
+            ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text) }, Cmd.none )
 
 
-makeEditable : Int -> Transaction -> Transaction
-makeEditable id transaction =
-    if transaction.id == id && not transaction.editable then
+toggleEditable : Bool -> Int -> Transaction -> Transaction
+toggleEditable curState id transaction =
+    if transaction.id == id && transaction.editable == curState then
         { transaction | editable = not transaction.editable }
 
     else
         transaction
+
+
+updateTransactionDescription : String -> Transaction -> Transaction
+updateTransactionDescription desc transaction =
+    { transaction | description = desc }
+
+
+updateTransaction : List Transaction -> Int -> (Transaction -> Transaction) -> List Transaction
+updateTransaction transactions id updateFn =
+    let
+        matchIdUpdateFn txn =
+            if txn.id == id then
+                updateFn txn
+
+            else
+                txn
+    in
+    List.map matchIdUpdateFn transactions
 
 
 
@@ -122,7 +159,16 @@ transactionRow transaction =
 transactionDescription : Transaction -> Html Msg
 transactionDescription transaction =
     if transaction.editable then
-        input [ type_ "text", value transaction.description ] []
+        -- TODO: fix ESC so it clears the changes
+        -- on "keyup" - takes the keyCode of the keyup event (numeric code of the key) and
+        -- transforms it into a KeyUp message (technically, transforms it into a Decoder msg)
+        input
+            [ type_ "text"
+            , value transaction.description
+            , on "keyup" (Json.Decode.map (KeyUp transaction.id) keyCode)
+            , onInput (DescriptionInput transaction.id)
+            ]
+            []
 
     else
         text transaction.description
