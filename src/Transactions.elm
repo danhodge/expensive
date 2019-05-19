@@ -1,10 +1,13 @@
 module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialModel, main, tableRow, update, view)
 
 import Browser
+import Browser.Dom
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (keyCode, on, onClick, onInput)
+import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
 import Json.Decode
+import String
+import Task
 
 
 
@@ -64,33 +67,32 @@ init flags =
 
 
 type Msg
-    = RowClick Int
-    | RowEsc Int
-    | KeyUp Int Int
-    | DescriptionInput Int String
+    = Noop
+    | RowClick Int
+    | CancelEditor Int
+    | SaveChanges Int String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
+    let
+        deactivateEditor id txn =
+            toggleEditable True id txn
+    in
     case message of
-        -- TODO: set focus on click
+        Noop ->
+            ( model, Cmd.none )
+
         RowClick id ->
-            ( { model | transactions = List.map (toggleEditable False id) model.transactions }, Cmd.none )
+            ( { model | transactions = List.map (toggleEditable False id) model.transactions }
+            , Task.attempt (\_ -> Noop) (Browser.Dom.focus (descInputId id))
+            )
 
-        RowEsc id ->
-            ( { model | transactions = List.map (toggleEditable True id) model.transactions }, Cmd.none )
+        CancelEditor id ->
+            ( { model | transactions = List.map (deactivateEditor id) model.transactions }, Cmd.none )
 
-        KeyUp id keyCode ->
-            case keyCode of
-                -- 27 = ESC
-                27 ->
-                    ( { model | transactions = List.map (toggleEditable True id) model.transactions }, Cmd.none )
-
-                _ ->
-                    ( model, Cmd.none )
-
-        DescriptionInput id text ->
-            ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text) }, Cmd.none )
+        SaveChanges id text ->
+            ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text << deactivateEditor id) }, Cmd.none )
 
 
 toggleEditable : Bool -> Int -> Transaction -> Transaction
@@ -159,19 +161,44 @@ transactionRow transaction =
 transactionDescription : Transaction -> Html Msg
 transactionDescription transaction =
     if transaction.editable then
-        -- TODO: fix ESC so it clears the changes
-        -- on "keyup" - takes the keyCode of the keyup event (numeric code of the key) and
-        -- transforms it into a KeyUp message (technically, transforms it into a Decoder msg)
         input
             [ type_ "text"
             , value transaction.description
-            , on "keyup" (Json.Decode.map (KeyUp transaction.id) keyCode)
-            , onInput (DescriptionInput transaction.id)
+            , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
+            , id (descInputId transaction.id)
             ]
             []
 
     else
         text transaction.description
+
+
+descInputId : Int -> String
+descInputId id =
+    "desc_" ++ String.fromInt id
+
+
+editorKeyHandler : Msg -> (String -> Msg) -> Attribute Msg
+editorKeyHandler escMsg enterMsg =
+    on "keyup" <|
+        -- takes the anonymous function that produces a Decoder Msg & keyCode (a Decoder Int) and
+        -- returns the Decoder Msg that is used by the keyup hanlder
+        Json.Decode.andThen
+            -- this function takes the keyCode and returns a different Decoder Msg depending on
+            -- what the keyCode was (the keyCode parameter is different than keyCode decoder below)
+            (\keyCode ->
+                if keyCode == 13 then
+                    -- on Enter, decode the targetValue of the event into the enterMsg
+                    Json.Decode.map enterMsg targetValue
+
+                else if keyCode == 27 then
+                    -- on ESC
+                    Json.Decode.succeed escMsg
+
+                else
+                    Json.Decode.fail (String.fromInt keyCode)
+            )
+            keyCode
 
 
 
