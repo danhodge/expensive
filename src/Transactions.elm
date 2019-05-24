@@ -19,10 +19,17 @@ type alias Model =
     }
 
 
+type alias Posting =
+    { category : String
+    , amountCents : Int
+    }
+
+
 type alias Transaction =
     { id : Int
     , date : String
     , description : String
+    , postings : List Posting
     , editable : Bool
     }
 
@@ -44,14 +51,17 @@ initialModel =
         [ Transaction 1
             "2019-03-01"
             "Food"
+            [ Posting "Expenses:Food:Restaurant" 1000 ]
             False
         , Transaction 2
             "2019-03-04"
             "Gas"
+            []
             False
         , Transaction 3
             "2019-03-06"
             "Pets"
+            [ Posting "Expenses:Food:Dog" 1999, Posting "Income:Rebates" -500 ]
             False
         ]
     }
