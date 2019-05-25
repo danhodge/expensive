@@ -140,7 +140,7 @@ view : Model -> Html Msg
 view model =
     table []
         -- there has to be a better way to do this
-        ([ tableRow th [ "Date", "Description" ] ]
+        ([ tableRow th [ "Date", "Description", "Postings" ] ]
             ++ transactionRows model.transactions
         )
 
@@ -165,6 +165,7 @@ transactionRow transaction =
     tr [ onClick (RowClick transaction.id) ]
         [ td [] [ text transaction.date ]
         , td [] [ transactionDescription transaction ]
+        , td [] [ postingsTable transaction ]
         ]
 
 
@@ -181,6 +182,35 @@ transactionDescription transaction =
 
     else
         text transaction.description
+
+
+postingsTable : Transaction -> Html Msg
+postingsTable transaction =
+    table []
+        (List.map postingRow transaction.postings)
+
+
+postingRow : Posting -> Html Msg
+postingRow posting =
+    tr [] [ td [] [ text posting.category ], td [] [ text (toCurrency posting.amountCents) ] ]
+
+
+toCurrency : Int -> String
+toCurrency amountCents =
+    let
+        ( dollars, cents ) =
+            toDollarsCents amountCents
+    in
+    String.join "." [ String.fromInt dollars, String.fromInt cents |> String.padLeft 2 '0' ]
+
+
+toDollarsCents : Int -> ( Int, Int )
+toDollarsCents cents =
+    let
+        dollars =
+            cents // 100
+    in
+    ( dollars, cents - (dollars * 100) )
 
 
 descInputId : Int -> String
