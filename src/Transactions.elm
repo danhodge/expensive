@@ -20,7 +20,8 @@ type alias Model =
 
 
 type alias Posting =
-    { category : String
+    { id : Int
+    , category : String
     , amountCents : Int
     }
 
@@ -51,7 +52,7 @@ initialModel =
         [ Transaction 1
             "2019-03-01"
             "Food"
-            [ Posting "Expenses:Food:Restaurant" 1000 ]
+            [ Posting 10 "Expenses:Food:Restaurant" 1000 ]
             False
         , Transaction 2
             "2019-03-04"
@@ -61,7 +62,7 @@ initialModel =
         , Transaction 3
             "2019-03-06"
             "Pets"
-            [ Posting "Expenses:Food:Dog" 1999, Posting "Income:Rebates" -500 ]
+            [ Posting 20 "Expenses:Food:Dog" 1999, Posting 30 "Income:Rebates" -500 ]
             False
         ]
     }
@@ -78,7 +79,7 @@ init flags =
 
 type Msg
     = Noop
-    | RowClick Int
+    | Click Int String
     | CancelEditor Int
     | SaveChanges Int String
 
@@ -93,9 +94,9 @@ update message model =
         Noop ->
             ( model, Cmd.none )
 
-        RowClick id ->
-            ( { model | transactions = List.map (toggleEditable False id) model.transactions }
-            , Task.attempt (\_ -> Noop) (Browser.Dom.focus (descInputId id))
+        Click txnId domId ->
+            ( { model | transactions = List.map (toggleEditable False txnId) model.transactions }
+            , Task.attempt (\_ -> Noop) (Browser.Dom.focus domId)
             )
 
         CancelEditor id ->
@@ -162,11 +163,26 @@ transactionRows transactions =
 
 transactionRow : Transaction -> Html Msg
 transactionRow transaction =
-    tr [ onClick (RowClick transaction.id) ]
+    tr []
         [ td [] [ text transaction.date ]
         , td [] [ transactionDescription transaction ]
         , td [] [ postingsTable transaction ]
         ]
+
+
+clickable : Transaction -> String -> List (Attribute Msg)
+clickable transaction domId =
+    [ id domId, clicker transaction ]
+
+
+clicker : Transaction -> Attribute Msg
+clicker transaction =
+    let
+        -- decoder that extracts the event.target.id property from the onClick event
+        decoder =
+            Json.Decode.map (Click transaction.id) (Json.Decode.at [ "target", "id" ] Json.Decode.string)
+    in
+    on "click" decoder
 
 
 transactionDescription : Transaction -> Html Msg
@@ -181,18 +197,36 @@ transactionDescription transaction =
             []
 
     else
-        text transaction.description
+        span (clickable transaction (descInputId transaction.id)) [ text transaction.description ]
 
 
 postingsTable : Transaction -> Html Msg
 postingsTable transaction =
     table []
-        (List.map postingRow transaction.postings)
+        (List.map (postingRow transaction) transaction.postings)
 
 
-postingRow : Posting -> Html Msg
-postingRow posting =
-    tr [] [ td [] [ text posting.category ], td [] [ text (toCurrency posting.amountCents) ] ]
+postingRow : Transaction -> Posting -> Html Msg
+postingRow transaction posting =
+    tr []
+        [ td [] [ postingEditor transaction posting "posting-desc-" .category ]
+        , td [] [ postingEditor transaction posting "posting-amt-" (.amountCents >> toCurrency) ]
+        ]
+
+
+postingEditor : Transaction -> Posting -> String -> (Posting -> String) -> Html Msg
+postingEditor transaction posting idPrefix display =
+    if transaction.editable then
+        input
+            [ type_ "text"
+            , value (display posting)
+            , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
+            , id (inputId idPrefix posting.id)
+            ]
+            []
+
+    else
+        span (clickable transaction (inputId idPrefix posting.id)) [ text (display posting) ]
 
 
 toCurrency : Int -> String
@@ -213,9 +247,14 @@ toDollarsCents cents =
     ( dollars, cents - (dollars * 100) )
 
 
+inputId : String -> Int -> String
+inputId prefix id =
+    prefix ++ String.fromInt id
+
+
 descInputId : Int -> String
 descInputId id =
-    "desc_" ++ String.fromInt id
+    inputId "desc-" id
 
 
 editorKeyHandler : Msg -> (String -> Msg) -> Attribute Msg
