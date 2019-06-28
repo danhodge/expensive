@@ -35,6 +35,11 @@ type alias Transaction =
     }
 
 
+type DisplayPosting
+    = EmptyPosting
+    | NonEmptyPosting Posting
+
+
 
 -- used to pass data in from JS - couldn't figure out if it's possible to omit this
 -- if not being used so made it a generic JSON block based on this advice:
@@ -203,30 +208,64 @@ transactionDescription transaction =
 postingsTable : Transaction -> Html Msg
 postingsTable transaction =
     table []
-        (List.map (postingRow transaction) transaction.postings)
+        (List.map (postingRow transaction) (processedPostings transaction.postings))
 
 
-postingRow : Transaction -> Posting -> Html Msg
+processedPostings : List Posting -> List DisplayPosting
+processedPostings postings =
+    case postings of
+        [] ->
+            [ EmptyPosting ]
+
+        _ ->
+            List.map NonEmptyPosting postings
+
+
+postingRow : Transaction -> DisplayPosting -> Html Msg
 postingRow transaction posting =
+    let
+        displayText =
+            postingText posting
+
+        cells =
+            case posting of
+                EmptyPosting ->
+                    [ td [] [ postingEditor transaction transaction.id "empty-posting-" displayText ]
+                    , td [] []
+                    ]
+
+                NonEmptyPosting post ->
+                    [ td [] [ postingEditor transaction post.id "posting-desc-" displayText ]
+                    , td [] [ postingEditor transaction post.id "posting-amt-" (post.amountCents |> toCurrency) ]
+                    ]
+    in
     tr []
-        [ td [] [ postingEditor transaction posting "posting-desc-" .category ]
-        , td [] [ postingEditor transaction posting "posting-amt-" (.amountCents >> toCurrency) ]
-        ]
+        cells
 
 
-postingEditor : Transaction -> Posting -> String -> (Posting -> String) -> Html Msg
-postingEditor transaction posting idPrefix display =
+postingText : DisplayPosting -> String
+postingText posting =
+    case posting of
+        EmptyPosting ->
+            "Choose a Category"
+
+        NonEmptyPosting post ->
+            post.category
+
+
+postingEditor : Transaction -> Int -> String -> String -> Html Msg
+postingEditor transaction postingId idPrefix displayText =
     if transaction.editable then
         input
             [ type_ "text"
-            , value (display posting)
+            , value displayText
             , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
-            , id (inputId idPrefix posting.id)
+            , id (inputId idPrefix postingId)
             ]
             []
 
     else
-        span (clickable transaction (inputId idPrefix posting.id)) [ text (display posting) ]
+        span (clickable transaction (inputId idPrefix postingId)) [ text displayText ]
 
 
 toCurrency : Int -> String
