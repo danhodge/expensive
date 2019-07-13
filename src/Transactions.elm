@@ -19,10 +19,17 @@ type alias Model =
     }
 
 
-type alias Posting =
-    { id : Int
-    , category : String
+type alias PostingData =
+    { category : Maybe String
     , amountCents : Int
+    }
+
+
+type alias Posting =
+    { id : Maybe Int
+    , visible : Bool
+    , data : PostingData
+    , originalData : Maybe PostingData
     }
 
 
@@ -57,17 +64,22 @@ initialModel =
         [ Transaction 1
             "2019-03-01"
             "Food"
-            [ Posting 10 "Expenses:Food:Restaurant" 1000 ]
+            [ Posting (Just 10) True (PostingData (Just "Expenses:Food:Restaurant") 1000) Nothing
+            , Posting Nothing False (PostingData Nothing 0) Nothing
+            ]
             False
         , Transaction 2
             "2019-03-04"
             "Gas"
-            []
+            [ Posting Nothing True (PostingData Nothing 0) Nothing ]
             False
         , Transaction 3
             "2019-03-06"
             "Pets"
-            [ Posting 20 "Expenses:Food:Dog" 1999, Posting 30 "Income:Rebates" -500 ]
+            [ Posting (Just 20) True (PostingData (Just "Expenses:Food:Dog") 1999) Nothing
+            , Posting (Just 30) True (PostingData (Just "Income:Rebates") -500) Nothing
+            , Posting Nothing False (PostingData Nothing 0) Nothing
+            ]
             False
         ]
     }
@@ -86,7 +98,10 @@ type Msg
     = Noop
     | Click Int String
     | CancelEditor Int
+    | SetPostingName Int Int String
+    | SetPostingAmount Int Int String
     | SaveChanges Int String
+    | SaveChanges2 Int
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -107,8 +122,17 @@ update message model =
         CancelEditor id ->
             ( { model | transactions = List.map (deactivateEditor id) model.transactions }, Cmd.none )
 
+        SetPostingName id postId name ->
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postId (updatePostingCategory name) }, Cmd.none )
+
+        SetPostingAmount id postId amount ->
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postId (updatePostingAmount amount) }, Cmd.none )
+
         SaveChanges id text ->
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text << deactivateEditor id) }, Cmd.none )
+
+        SaveChanges2 id ->
+            ( model, Cmd.none )
 
 
 toggleEditable : Bool -> Int -> Transaction -> Transaction
@@ -136,6 +160,42 @@ updateTransaction transactions id updateFn =
                 txn
     in
     List.map matchIdUpdateFn transactions
+
+
+
+-- TODO: is there a way to make a generic function that can update transactions OR postings?
+
+
+updatePosting : List Posting -> Int -> (Posting -> Posting) -> List Posting
+updatePosting postings id updateFn =
+    let
+        matchIdUpdateFn posting =
+            if posting.id == id then
+                updateFn posting
+
+            else
+                posting
+    in
+    List.map matchIdUpdateFn postings
+
+
+updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Posting) -> List Transaction
+updateTransactionAndPosting transactions txnId postId updatePostingFn =
+    let
+        updateTxnFn transaction =
+            { transaction | postings = updatePosting transaction.postings postId updatePostingFn }
+    in
+    updateTransaction transactions txnId updateTxnFn
+
+
+updatePostingCategory : String -> Posting -> Posting
+updatePostingCategory catg posting =
+    { posting | category = catg }
+
+
+updatePostingAmount : String -> Posting -> Posting
+updatePostingAmount amount posting =
+    { posting | amountCents = toCents amount }
 
 
 
@@ -234,16 +294,17 @@ postingRow transaction posting =
         displayText =
             postingText posting
 
+        -- TODO: use the position (index) of the posting to generate its DOM id instead of its id, since it won't always have an id
         cells =
             case posting of
                 EmptyPosting ->
-                    [ td [] [ postingEditor transaction transaction.id "empty-posting-" displayText ]
-                    , td [] [ postingEditor transaction transaction.id "posting-amt-" "" ]
+                    [ td [] [ postingEditor SetPostingName transaction transaction.id "empty-posting-" displayText ]
+                    , td [] [ postingEditor SetPostingAmount transaction transaction.id "posting-amt-" "" ]
                     ]
 
                 NonEmptyPosting post ->
-                    [ td [] [ postingEditor transaction post.id "posting-desc-" displayText ]
-                    , td [] [ postingEditor transaction post.id "posting-amt-" (post.amountCents |> toCurrency) ]
+                    [ td [] [ postingEditor SetPostingName transaction post.id "posting-desc-" displayText ]
+                    , td [] [ postingEditor SetPostingAmount transaction post.id "posting-amt-" (post.amountCents |> toCurrency) ]
                     ]
     in
     tr []
@@ -260,13 +321,14 @@ postingText posting =
             post.category
 
 
-postingEditor : Transaction -> Int -> String -> String -> Html Msg
-postingEditor transaction postingId idPrefix displayText =
+postingEditor : (Int -> Int -> String -> Msg) -> Transaction -> Int -> String -> String -> Html Msg
+postingEditor saveMsg transaction postingId idPrefix displayText =
     if transaction.editable then
         input
             [ type_ "text"
             , value displayText
-            , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
+            , onInput (saveMsg transaction.id postingId)
+            , editorKeyHandler2 (CancelEditor transaction.id) (SaveChanges2 transaction.id)
             , id (inputId idPrefix postingId)
             ]
             []
@@ -293,6 +355,15 @@ toDollarsCents cents =
     ( dollars, cents - (dollars * 100) )
 
 
+
+-- TODO: this doesn't allow negatives, also causes some weird input behavior
+
+
+toCents : String -> Int
+toCents dollars =
+    Maybe.withDefault 0 (String.filter Char.isDigit dollars |> String.toInt)
+
+
 inputId : String -> Int -> String
 inputId prefix id =
     prefix ++ String.fromInt id
@@ -315,6 +386,29 @@ editorKeyHandler escMsg enterMsg =
                 if keyCode == 13 then
                     -- on Enter, decode the targetValue of the event into the enterMsg
                     Json.Decode.map enterMsg targetValue
+
+                else if keyCode == 27 then
+                    -- on ESC
+                    Json.Decode.succeed escMsg
+
+                else
+                    Json.Decode.fail (String.fromInt keyCode)
+            )
+            keyCode
+
+
+editorKeyHandler2 : Msg -> Msg -> Attribute Msg
+editorKeyHandler2 escMsg enterMsg =
+    on "keyup" <|
+        -- takes the anonymous function that produces a Decoder Msg & keyCode (a Decoder Int) and
+        -- returns the Decoder Msg that is used by the keyup hanlder
+        Json.Decode.andThen
+            -- this function takes the keyCode and returns a different Decoder Msg depending on
+            -- what the keyCode was (the keyCode parameter is different than keyCode decoder below)
+            (\keyCode ->
+                if keyCode == 13 then
+                    -- on Enter
+                    Json.Decode.succeed enterMsg
 
                 else if keyCode == 27 then
                     -- on ESC
