@@ -208,17 +208,24 @@ transactionDescription transaction =
 postingsTable : Transaction -> Html Msg
 postingsTable transaction =
     table []
-        (List.map (postingRow transaction) (processedPostings transaction.postings))
+        (List.map (postingRow transaction) (processedPostings transaction))
 
 
-processedPostings : List Posting -> List DisplayPosting
-processedPostings postings =
-    case postings of
+processedPostings : Transaction -> List DisplayPosting
+processedPostings transaction =
+    case transaction.postings of
         [] ->
             [ EmptyPosting ]
 
         _ ->
-            List.map NonEmptyPosting postings
+            -- this is ugly - should it be extracted into a function instead?
+            List.map NonEmptyPosting transaction.postings
+                ++ (if transaction.editable then
+                        [ EmptyPosting ]
+
+                    else
+                        []
+                   )
 
 
 postingRow : Transaction -> DisplayPosting -> Html Msg
@@ -231,7 +238,7 @@ postingRow transaction posting =
             case posting of
                 EmptyPosting ->
                     [ td [] [ postingEditor transaction transaction.id "empty-posting-" displayText ]
-                    , td [] []
+                    , td [] [ postingEditor transaction transaction.id "posting-amt-" "" ]
                     ]
 
                 NonEmptyPosting post ->
