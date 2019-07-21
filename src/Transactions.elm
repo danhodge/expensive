@@ -148,7 +148,12 @@ update message model =
 toggleEditable : Bool -> Int -> Transaction -> Transaction
 toggleEditable curState id transaction =
     if transaction.id == id && transaction.editable == curState then
-        { transaction | editable = not transaction.editable }
+        case curState of
+            True ->
+                { transaction | editable = not transaction.editable, data = Maybe.withDefault transaction.data transaction.originalData }
+
+            False ->
+                { transaction | editable = not transaction.editable, originalData = Just transaction.data }
 
     else
         transaction
@@ -156,7 +161,14 @@ toggleEditable curState id transaction =
 
 updateTransactionDescription : String -> Transaction -> Transaction
 updateTransactionDescription desc transaction =
-    { transaction | description = desc }
+    let
+        curData =
+            transaction.data
+
+        updatedData =
+            { curData | description = desc }
+    in
+    { transaction | data = updatedData }
 
 
 updateTransaction : List Transaction -> Int -> (Transaction -> Transaction) -> List Transaction
@@ -200,7 +212,7 @@ updateTransactionAndPosting transactions txnId postId updatePostingFn =
 
 updatePostingCategory : String -> Posting -> Posting
 updatePostingCategory catg posting =
-    { posting | category = catg }
+    { posting | category = Just catg }
 
 
 updatePostingAmount : String -> Posting -> Posting
@@ -281,21 +293,21 @@ postingsTable transaction =
         (List.map (postingRow transaction) (processedPostings transaction))
 
 
-processedPostings : Transaction -> List DisplayPosting
+processedPostings : Transaction -> List Posting
 processedPostings transaction =
-    case transaction.postings of
-        [] ->
-            [ EmptyPosting ]
+    let
+        numPostings =
+            List.length transaction.data.postings
+    in
+    if transaction.editable || numPostings == 1 then
+        transaction.data.postings
 
-        _ ->
-            -- this is ugly - should it be extracted into a function instead?
-            List.map NonEmptyPosting transaction.postings
-                ++ (if transaction.editable then
-                        [ EmptyPosting ]
+    else
+        List.take (numPostings - 1) transaction.data.postings
 
-                    else
-                        []
-                   )
+
+
+-- TODO: change method to take a Posting instead of a DisplayPosting
 
 
 postingRow : Transaction -> DisplayPosting -> Html Msg
