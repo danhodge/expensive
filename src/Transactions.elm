@@ -19,26 +19,29 @@ type alias Model =
     }
 
 
-type alias PostingData =
-    { category : Maybe String
+type alias Posting =
+    { id : Maybe Int
+    , category : Maybe String
     , amountCents : Int
     }
 
 
-type alias Posting =
-    { id : Maybe Int
-    , visible : Bool
-    , data : PostingData
-    , originalData : Maybe PostingData
+
+-- TransactionData = the data in a transaction that is editable
+
+
+type alias TransactionData =
+    { description : String
+    , postings : List Posting
     }
 
 
 type alias Transaction =
     { id : Int
     , date : String
-    , description : String
-    , postings : List Posting
     , editable : Bool
+    , data : TransactionData
+    , originalData : Maybe TransactionData
     }
 
 
@@ -63,24 +66,31 @@ initialModel =
     { transactions =
         [ Transaction 1
             "2019-03-01"
-            "Food"
-            [ Posting (Just 10) True (PostingData (Just "Expenses:Food:Restaurant") 1000) Nothing
-            , Posting Nothing False (PostingData Nothing 0) Nothing
-            ]
             False
+            (TransactionData
+                "Food"
+                [ Posting (Just 10) (Just "Expenses:Food:Restaurant") 1000
+                , Posting Nothing Nothing 0
+                ]
+            )
+            Nothing
         , Transaction 2
             "2019-03-04"
-            "Gas"
-            [ Posting Nothing True (PostingData Nothing 0) Nothing ]
             False
+            (TransactionData "Gas"
+                [ Posting Nothing Nothing 0 ]
+            )
+            Nothing
         , Transaction 3
             "2019-03-06"
-            "Pets"
-            [ Posting (Just 20) True (PostingData (Just "Expenses:Food:Dog") 1999) Nothing
-            , Posting (Just 30) True (PostingData (Just "Income:Rebates") -500) Nothing
-            , Posting Nothing False (PostingData Nothing 0) Nothing
-            ]
             False
+            (TransactionData "Pets"
+                [ Posting (Just 20) (Just "Expenses:Food:Dog") 1999
+                , Posting (Just 30) (Just "Income:Rebates") -500
+                , Posting Nothing Nothing 0
+                ]
+            )
+            Nothing
         ]
     }
 
