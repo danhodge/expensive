@@ -45,11 +45,6 @@ type alias Transaction =
     }
 
 
-type DisplayPosting
-    = EmptyPosting
-    | NonEmptyPosting Posting
-
-
 
 -- used to pass data in from JS - couldn't figure out if it's possible to omit this
 -- if not being used so made it a generic JSON block based on this advice:
@@ -290,7 +285,7 @@ transactionDescription transaction =
 postingsTable : Transaction -> Html Msg
 postingsTable transaction =
     table []
-        (List.map (postingRow transaction) (processedPostings transaction))
+        (List.indexedMap (postingRow transaction) (processedPostings transaction))
 
 
 processedPostings : Transaction -> List Posting
@@ -306,57 +301,49 @@ processedPostings transaction =
         List.take (numPostings - 1) transaction.data.postings
 
 
-
--- TODO: change method to take a Posting instead of a DisplayPosting
-
-
-postingRow : Transaction -> DisplayPosting -> Html Msg
-postingRow transaction posting =
+postingRow : Transaction -> Int -> Posting -> Html Msg
+postingRow transaction postingIndex posting =
     let
         displayText =
             postingText posting
 
-        -- TODO: use the position (index) of the posting to generate its DOM id instead of its id, since it won't always have an id
         cells =
-            case posting of
-                EmptyPosting ->
-                    [ td [] [ postingEditor SetPostingName transaction transaction.id "empty-posting-" displayText ]
-                    , td [] [ postingEditor SetPostingAmount transaction transaction.id "posting-amt-" "" ]
-                    ]
-
-                NonEmptyPosting post ->
-                    [ td [] [ postingEditor SetPostingName transaction post.id "posting-desc-" displayText ]
-                    , td [] [ postingEditor SetPostingAmount transaction post.id "posting-amt-" (post.amountCents |> toCurrency) ]
-                    ]
+            [ td [] [ postingEditor SetPostingName transaction postingIndex "posting-desc-" displayText ]
+            , td [] [ postingEditor SetPostingAmount transaction postingIndex "posting-amt-" (posting.amountCents |> toCurrency) ]
+            ]
     in
     tr []
         cells
 
 
-postingText : DisplayPosting -> String
+postingText : Posting -> String
 postingText posting =
-    case posting of
-        EmptyPosting ->
-            "Choose a Category"
+    case posting.category of
+        Just value ->
+            value
 
-        NonEmptyPosting post ->
-            post.category
+        Nothing ->
+            "Choose a Category"
 
 
 postingEditor : (Int -> Int -> String -> Msg) -> Transaction -> Int -> String -> String -> Html Msg
-postingEditor saveMsg transaction postingId idPrefix displayText =
+postingEditor saveMsg transaction postingIndex idPrefix displayText =
+    let
+        domId =
+            inputId (inputId idPrefix transaction.id) postingIndex
+    in
     if transaction.editable then
         input
             [ type_ "text"
             , value displayText
-            , onInput (saveMsg transaction.id postingId)
+            , onInput (saveMsg transaction.id postingIndex)
             , editorKeyHandler2 (CancelEditor transaction.id) (SaveChanges2 transaction.id)
-            , id (inputId idPrefix postingId)
+            , id domId
             ]
             []
 
     else
-        span (clickable transaction (inputId idPrefix postingId)) [ text displayText ]
+        span (clickable transaction domId) [ text displayText ]
 
 
 toCurrency : Int -> String
