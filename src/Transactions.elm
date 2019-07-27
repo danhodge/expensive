@@ -127,11 +127,11 @@ update message model =
         CancelEditor id ->
             ( { model | transactions = List.map (deactivateEditor id) model.transactions }, Cmd.none )
 
-        SetPostingName id postId name ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postId (updatePostingCategory name) }, Cmd.none )
+        SetPostingName id postIdx name ->
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name) }, Cmd.none )
 
-        SetPostingAmount id postId amount ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postId (updatePostingAmount amount) }, Cmd.none )
+        SetPostingAmount id postIdx amount ->
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount) }, Cmd.none )
 
         SaveChanges id text ->
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text << deactivateEditor id) }, Cmd.none )
@@ -184,25 +184,38 @@ updateTransaction transactions id updateFn =
 
 
 updatePosting : List Posting -> Int -> (Posting -> Posting) -> List Posting
-updatePosting postings id updateFn =
-    let
-        matchIdUpdateFn posting =
-            if posting.id == id then
-                updateFn posting
+updatePosting postings idx updateFn =
+    List.indexedMap (updateMatchedPosting updateFn idx) postings
 
-            else
-                posting
-    in
-    List.map matchIdUpdateFn postings
+
+updateMatchedPosting : (Posting -> Posting) -> Int -> Int -> Posting -> Posting
+updateMatchedPosting updateFn targetIdx postingIdx posting =
+    if postingIdx == targetIdx then
+        updateFn posting
+
+    else
+        posting
 
 
 updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Posting) -> List Transaction
-updateTransactionAndPosting transactions txnId postId updatePostingFn =
+updateTransactionAndPosting transactions txnId postIdx updatePostingFn =
     let
         updateTxnFn transaction =
-            { transaction | postings = updatePosting transaction.postings postId updatePostingFn }
+            updateMatchedTransaction transaction (updatePosting transaction.data.postings postIdx updatePostingFn)
     in
     updateTransaction transactions txnId updateTxnFn
+
+
+updateMatchedTransaction : Transaction -> List Posting -> Transaction
+updateMatchedTransaction transaction updatedPostings =
+    let
+        curData =
+            transaction.data
+
+        updatedData =
+            { curData | postings = updatedPostings }
+    in
+    { transaction | data = updatedData }
 
 
 updatePostingCategory : String -> Posting -> Posting
@@ -272,14 +285,14 @@ transactionDescription transaction =
     if transaction.editable then
         input
             [ type_ "text"
-            , value transaction.description
+            , value transaction.data.description
             , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
             , id (descInputId transaction.id)
             ]
             []
 
     else
-        span (clickable transaction (descInputId transaction.id)) [ text transaction.description ]
+        span (clickable transaction (descInputId transaction.id)) [ text transaction.data.description ]
 
 
 postingsTable : Transaction -> Html Msg
