@@ -112,15 +112,18 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     let
-        deactivateEditor id txn =
+        toggle id txn =
             toggleEditable True id txn
+
+        deactivateEditor id =
+            toggle id << restoreOriginalData
     in
     case message of
         Noop ->
             ( model, Cmd.none )
 
         Click txnId domId ->
-            ( { model | transactions = List.map (toggleEditable False txnId) model.transactions }
+            ( { model | transactions = List.map (toggleEditable False txnId << captureOriginalData) model.transactions }
             , Task.attempt (\_ -> Noop) (Browser.Dom.focus domId)
             )
 
@@ -137,7 +140,7 @@ update message model =
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text << deactivateEditor id) }, Cmd.none )
 
         SaveChanges2 id ->
-            ( model, Cmd.none )
+            ( { model | transactions = List.map (toggle id << clearOriginalData) model.transactions }, Cmd.none )
 
 
 toggleEditable : Bool -> Int -> Transaction -> Transaction
@@ -145,13 +148,28 @@ toggleEditable curState id transaction =
     if transaction.id == id && transaction.editable == curState then
         case curState of
             True ->
-                { transaction | editable = not transaction.editable, data = Maybe.withDefault transaction.data transaction.originalData }
+                { transaction | editable = not transaction.editable }
 
             False ->
-                { transaction | editable = not transaction.editable, originalData = Just transaction.data }
+                { transaction | editable = not transaction.editable }
 
     else
         transaction
+
+
+restoreOriginalData : Transaction -> Transaction
+restoreOriginalData transaction =
+    { transaction | data = Maybe.withDefault transaction.data transaction.originalData }
+
+
+captureOriginalData : Transaction -> Transaction
+captureOriginalData transaction =
+    { transaction | originalData = Just transaction.data }
+
+
+clearOriginalData : Transaction -> Transaction
+clearOriginalData transaction =
+    { transaction | originalData = Nothing }
 
 
 updateTransactionDescription : String -> Transaction -> Transaction
