@@ -103,10 +103,10 @@ type Msg
     = Noop
     | Click Int String
     | CancelEditor Int
+    | SetDescription Int String
     | SetPostingName Int Int String
     | SetPostingAmount Int Int String
-    | SaveChanges Int String
-    | SaveChanges2 Int
+    | SaveChanges Int
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -130,16 +130,16 @@ update message model =
         CancelEditor id ->
             ( { model | transactions = List.map (deactivateEditor id) model.transactions }, Cmd.none )
 
+        SetDescription id desc ->
+            ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
+
         SetPostingName id postIdx name ->
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name) }, Cmd.none )
 
         SetPostingAmount id postIdx amount ->
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount) }, Cmd.none )
 
-        SaveChanges id text ->
-            ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription text << deactivateEditor id) }, Cmd.none )
-
-        SaveChanges2 id ->
+        SaveChanges id ->
             ( { model | transactions = List.map (toggle id << clearOriginalData) model.transactions }, Cmd.none )
 
 
@@ -304,6 +304,7 @@ transactionDescription transaction =
         input
             [ type_ "text"
             , value transaction.data.description
+            , onInput (SetDescription transaction.id)
             , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
             , id (descInputId transaction.id)
             ]
@@ -368,7 +369,7 @@ postingEditor saveMsg transaction postingIndex idPrefix displayText =
             [ type_ "text"
             , value displayText
             , onInput (saveMsg transaction.id postingIndex)
-            , editorKeyHandler2 (CancelEditor transaction.id) (SaveChanges2 transaction.id)
+            , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
             , id domId
             ]
             []
@@ -414,31 +415,8 @@ descInputId id =
     inputId "desc-" id
 
 
-editorKeyHandler : Msg -> (String -> Msg) -> Attribute Msg
+editorKeyHandler : Msg -> Msg -> Attribute Msg
 editorKeyHandler escMsg enterMsg =
-    on "keyup" <|
-        -- takes the anonymous function that produces a Decoder Msg & keyCode (a Decoder Int) and
-        -- returns the Decoder Msg that is used by the keyup hanlder
-        Json.Decode.andThen
-            -- this function takes the keyCode and returns a different Decoder Msg depending on
-            -- what the keyCode was (the keyCode parameter is different than keyCode decoder below)
-            (\keyCode ->
-                if keyCode == 13 then
-                    -- on Enter, decode the targetValue of the event into the enterMsg
-                    Json.Decode.map enterMsg targetValue
-
-                else if keyCode == 27 then
-                    -- on ESC
-                    Json.Decode.succeed escMsg
-
-                else
-                    Json.Decode.fail (String.fromInt keyCode)
-            )
-            keyCode
-
-
-editorKeyHandler2 : Msg -> Msg -> Attribute Msg
-editorKeyHandler2 escMsg enterMsg =
     on "keyup" <|
         -- takes the anonymous function that produces a Decoder Msg & keyCode (a Decoder Int) and
         -- returns the Decoder Msg that is used by the keyup hanlder
