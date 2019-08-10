@@ -5,5 +5,5 @@ Life Is Expensive
 ## Build
 
 ``` bash
-elm make src/Transactions.elm --output=transactions.js --debug
+elm make src/Transactions.elm --output=public/js/transactions.js --debug
 ```

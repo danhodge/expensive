@@ -110,10 +110,6 @@ type Msg
     | SaveChanges Int
 
 
-
--- TODO: automatically add a new posting during editing
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     let
