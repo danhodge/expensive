@@ -139,14 +139,13 @@ update message model =
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
 
         SetPostingName id postIdx name ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name) }, Cmd.none )
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name >> justify) }, Cmd.none )
 
         SetPostingAmount id postIdx amount ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount) }, Cmd.none )
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount >> justify) }, Cmd.none )
 
-        -- TODO: use removeIndex to remove the posting at postIdx
         RemovePosting id postIdx ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount) }, Cmd.none )
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (\posting -> Nothing) }, Cmd.none )
 
         SaveChanges id ->
             ( { model | transactions = List.map (toggle id << clearOriginalData) model.transactions }, Cmd.none )
@@ -206,39 +205,30 @@ updateTransaction transactions id updateFn =
     List.map matchIdUpdateFn transactions
 
 
+justify : a -> Maybe a
+justify value =
+    Just value
+
+
 
 -- TODO: is there a way to make a generic function that can update transactions OR postings?
 
 
-removeIndex : Int -> List a -> List a
-removeIndex idx list =
-    list
-        |> List.indexedMap
-            (\i e ->
-                if i == idx then
-                    Nothing
-
-                else
-                    Just e
-            )
-        |> List.filterMap (\x -> x)
-
-
-updatePosting : List Posting -> Int -> (Posting -> Posting) -> List Posting
+updatePosting : List Posting -> Int -> (Posting -> Maybe Posting) -> List Posting
 updatePosting postings idx updateFn =
-    List.indexedMap (updateMatchedPosting updateFn idx) postings
+    postings |> List.indexedMap (updateMatchedPosting updateFn idx) |> List.filterMap (\x -> x)
 
 
-updateMatchedPosting : (Posting -> Posting) -> Int -> Int -> Posting -> Posting
+updateMatchedPosting : (Posting -> Maybe Posting) -> Int -> Int -> Posting -> Maybe Posting
 updateMatchedPosting updateFn targetIdx postingIdx posting =
     if postingIdx == targetIdx then
         updateFn posting
 
     else
-        posting
+        Just posting
 
 
-updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Posting) -> List Transaction
+updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Maybe Posting) -> List Transaction
 updateTransactionAndPosting transactions txnId postIdx updatePostingFn =
     let
         updateTxnFn transaction =
