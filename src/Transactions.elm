@@ -214,8 +214,21 @@ justify value =
 -- TODO: is there a way to make a generic function that can update transactions OR postings?
 
 
-updatePosting : List Posting -> Int -> (Posting -> Maybe Posting) -> List Posting
-updatePosting postings idx updateFn =
+ensureEmptyPosting : List Posting -> List Posting
+ensureEmptyPosting postings =
+    let
+        hasEmptyPosting =
+            List.any emptyPosting postings
+    in
+    if hasEmptyPosting then
+        postings
+
+    else
+        postings ++ [ Posting Nothing Nothing 0 ]
+
+
+updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
+updatePosting idx updateFn postings =
     postings |> List.indexedMap (updateMatchedPosting updateFn idx) |> List.filterMap (\x -> x)
 
 
@@ -232,7 +245,7 @@ updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Mayb
 updateTransactionAndPosting transactions txnId postIdx updatePostingFn =
     let
         updateTxnFn transaction =
-            updateMatchedTransaction transaction (updatePosting transaction.data.postings postIdx updatePostingFn)
+            updateMatchedTransaction transaction ((updatePosting postIdx updatePostingFn >> ensureEmptyPosting) transaction.data.postings)
     in
     updateTransaction transactions txnId updateTxnFn
 
