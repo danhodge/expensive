@@ -106,7 +106,12 @@ type Msg
     | SetDescription Int String
     | SetPostingName Int Int String
     | SetPostingAmount Int Int String
+    | RemovePosting Int Int
     | SaveChanges Int
+
+
+
+-- TODO: automatically add a new posting during editing
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -137,6 +142,10 @@ update message model =
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name) }, Cmd.none )
 
         SetPostingAmount id postIdx amount ->
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount) }, Cmd.none )
+
+        -- TODO: use removeIndex to remove the posting at postIdx
+        RemovePosting id postIdx ->
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount) }, Cmd.none )
 
         SaveChanges id ->
@@ -199,6 +208,20 @@ updateTransaction transactions id updateFn =
 
 
 -- TODO: is there a way to make a generic function that can update transactions OR postings?
+
+
+removeIndex : Int -> List a -> List a
+removeIndex idx list =
+    list
+        |> List.indexedMap
+            (\i e ->
+                if i == idx then
+                    Nothing
+
+                else
+                    Just e
+            )
+        |> List.filterMap (\x -> x)
 
 
 updatePosting : List Posting -> Int -> (Posting -> Posting) -> List Posting
@@ -343,9 +366,28 @@ postingRow transaction postingIndex posting =
             [ td [] [ postingEditor SetPostingName transaction postingIndex "posting-desc-" displayText ]
             , td [] [ postingEditor SetPostingAmount transaction postingIndex "posting-amt-" (posting.amountCents |> toCurrency) ]
             ]
+
+        controls =
+            if transaction.editable && not (emptyPosting posting) then
+                [ td [] [ a [ onClick (RemovePosting transaction.id postingIndex) ] [ text "X" ] ] ]
+
+            else
+                [ td [] [] ]
     in
     tr []
-        cells
+        (cells
+            ++ controls
+        )
+
+
+emptyPosting : Posting -> Bool
+emptyPosting posting =
+    case posting.category of
+        Nothing ->
+            abs posting.amountCents == 0
+
+        Just value ->
+            False
 
 
 postingText : Posting -> String
