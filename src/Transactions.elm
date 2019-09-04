@@ -5,7 +5,7 @@ import Browser.Dom
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
-import Json.Decode
+import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, map5, string)
 import String
 import Task
 
@@ -266,6 +266,43 @@ updatePostingCategory catg posting =
 updatePostingAmount : String -> Posting -> Posting
 updatePostingAmount amount posting =
     { posting | amountCents = toCents amount }
+
+
+
+-- Encoders & Decoders
+
+
+decodedPosting : Int -> String -> Int -> Posting
+decodedPosting id category amountCents =
+    Posting (Just id) (Just category) amountCents
+
+
+postingDecoder : Decoder Posting
+postingDecoder =
+    map3 decodedPosting
+        (field "id" int)
+        (field "category" string)
+        (field "amountCents" int)
+
+
+transactionDataDecoder : Decoder TransactionData
+transactionDataDecoder =
+    map2 TransactionData
+        (field "description" string)
+        (field "postings" (list postingDecoder))
+
+
+decodedTransaction : Int -> String -> TransactionData -> Transaction
+decodedTransaction id date data =
+    Transaction id date False data Nothing
+
+
+transactionDecoder : Decoder Transaction
+transactionDecoder =
+    map3 decodedTransaction
+        (field "id" int)
+        (field "date" string)
+        (field "data" transactionDataDecoder)
 
 
 
