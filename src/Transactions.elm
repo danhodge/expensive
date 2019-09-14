@@ -5,6 +5,7 @@ import Browser.Dom
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
+import Http
 import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, map5, string)
 import String
 import Task
@@ -58,41 +59,12 @@ type alias Flags =
 
 initialModel : Model
 initialModel =
-    { transactions =
-        [ Transaction 1
-            "2019-03-01"
-            False
-            (TransactionData
-                "Food"
-                [ Posting (Just 10) (Just "Expenses:Food:Restaurant") 1000
-                , Posting Nothing Nothing 0
-                ]
-            )
-            Nothing
-        , Transaction 2
-            "2019-03-04"
-            False
-            (TransactionData "Gas"
-                [ Posting Nothing Nothing 0 ]
-            )
-            Nothing
-        , Transaction 3
-            "2019-03-06"
-            False
-            (TransactionData "Pets"
-                [ Posting (Just 20) (Just "Expenses:Food:Dog") 1999
-                , Posting (Just 30) (Just "Income:Rebates") -500
-                , Posting Nothing Nothing 0
-                ]
-            )
-            Nothing
-        ]
-    }
+    { transactions = [] }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( initialModel, Cmd.none )
+    ( initialModel, getTransactions )
 
 
 
@@ -101,6 +73,7 @@ init flags =
 
 type Msg
     = Noop
+    | NewTransactions (Result Http.Error (List Transaction))
     | Click Int String
     | CancelEditor Int
     | SetDescription Int String
@@ -121,6 +94,13 @@ update message model =
     in
     case message of
         Noop ->
+            ( model, Cmd.none )
+
+        NewTransactions (Ok newTransactions) ->
+            ( { model | transactions = newTransactions }, Cmd.none )
+
+        NewTransactions (Err error) ->
+            -- TODO: display an error
             ( model, Cmd.none )
 
         Click txnId domId ->
@@ -287,7 +267,7 @@ postingDecoder =
 
 transactionDataDecoder : Decoder TransactionData
 transactionDataDecoder =
-    map2 TransactionData
+    map2 decodedTransactionData
         (field "description" string)
         (field "postings" (list postingDecoder))
 
@@ -297,12 +277,29 @@ decodedTransaction id date data =
     Transaction id date False data Nothing
 
 
+decodedTransactionData : String -> List Posting -> TransactionData
+decodedTransactionData description postings =
+    TransactionData description (ensureEmptyPosting postings)
+
+
 transactionDecoder : Decoder Transaction
 transactionDecoder =
     map3 decodedTransaction
         (field "id" int)
         (field "date" string)
         (field "data" transactionDataDecoder)
+
+
+
+-- COMMANDS
+
+
+getTransactions : Cmd Msg
+getTransactions =
+    Http.get
+        { url = "http://localhost:4567/transactions"
+        , expect = Http.expectJson NewTransactions (list transactionDecoder)
+        }
 
 
 
