@@ -6,7 +6,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
 import Http
-import Json.Decode as Decode exposing (Decoder, field, map2, map3, map5)
+import Json.Decode as Decode exposing (Decoder, field, map2, map3, map4, map5)
 import Json.Encode as Encode exposing (..)
 import String
 import Task
@@ -42,6 +42,7 @@ type alias TransactionData =
 type alias Transaction =
     { id : Int
     , date : String
+    , amountCents : Int
     , editable : Bool
     , data : TransactionData
     , originalData : Maybe TransactionData
@@ -326,9 +327,9 @@ transactionDataDecoder =
         (field "postings" (Decode.list postingDecoder))
 
 
-decodedTransaction : Int -> String -> TransactionData -> Transaction
-decodedTransaction id date data =
-    Transaction id date False data Nothing
+decodedTransaction : Int -> String -> Int -> TransactionData -> Transaction
+decodedTransaction id date amountCents data =
+    Transaction id date amountCents False data Nothing
 
 
 decodedTransactionData : String -> List Posting -> TransactionData
@@ -338,9 +339,10 @@ decodedTransactionData description postings =
 
 transactionDecoder : Decoder Transaction
 transactionDecoder =
-    map3 decodedTransaction
+    map4 decodedTransaction
         (field "id" Decode.int)
         (field "date" Decode.string)
+        (field "amountCents" Decode.int)
         (field "data" transactionDataDecoder)
 
 
@@ -389,7 +391,7 @@ view : Model -> Html Msg
 view model =
     table []
         -- there has to be a better way to do this
-        ([ tableRow th [ "Date", "Description", "Postings" ] ]
+        ([ tableRow th [ "Date", "Description", "Amount", "Status", "Postings" ] ]
             ++ transactionRows model.transactions
         )
 
@@ -414,6 +416,8 @@ transactionRow transaction =
     tr []
         [ td [] [ text transaction.date ]
         , td [] [ transactionDescription transaction ]
+        , td [] [ text (toCurrency transaction.amountCents) ]
+        , td [] [ transactionStatus transaction ]
         , td [] [ postingsTable transaction ]
         ]
 
@@ -447,6 +451,20 @@ transactionDescription transaction =
 
     else
         span (clickable transaction (descInputId transaction.id)) [ text transaction.data.description ]
+
+
+transactionStatus : Transaction -> Html Msg
+transactionStatus transaction =
+    let
+        balance =
+            transaction.amountCents + List.foldl (+) 0 (List.map .amountCents transaction.data.postings)
+    in
+    case balance of
+        0 ->
+            text "Balanced"
+
+        _ ->
+            text "Unbalanced"
 
 
 postingsTable : Transaction -> Html Msg
@@ -547,7 +565,7 @@ toDollarsCents cents =
         dollars =
             cents // 100
     in
-    ( dollars, cents - (dollars * 100) )
+    ( dollars, abs (cents - (dollars * 100)) )
 
 
 

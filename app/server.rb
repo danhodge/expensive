@@ -13,6 +13,7 @@ helpers do
     @transactions ||= {
       next_id => {
         date: "2019-03-01",
+        amountCents: -1000,
         data: {
           description: "Food",
           postings: [
@@ -26,6 +27,7 @@ helpers do
       },
       next_id => {
         date: "2019-03-02",
+        amountCents: -3461,
         data: {
           description: "Gas",
           postings: []
@@ -33,6 +35,7 @@ helpers do
       },
       next_id => {
         date: "2019-03-06",
+        amountCents: -1499,
         data: {
           description: "Pets",
           postings: [
