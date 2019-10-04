@@ -6,9 +6,11 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
 import Http
-import Json.Decode exposing (Decoder, bool, field, int, list, map2, map3, map5, string)
+import Json.Decode as Decode exposing (Decoder, field, map2, map3, map5)
+import Json.Encode as Encode exposing (..)
 import String
 import Task
+import Url.Builder
 
 
 
@@ -81,16 +83,20 @@ type Msg
     | SetPostingAmount Int Int String
     | RemovePosting Int Int
     | SaveChanges Int
+    | ChangesSaved Int (Result Http.Error Transaction)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     let
-        toggle id txn =
-            toggleEditable True id txn
+        toggleableRow id curEditState txn =
+            txn.id == id && txn.editable == curEditState
 
-        deactivateEditor id =
-            toggle id << restoreOriginalData
+        deactivateEditor =
+            restoreOriginalData >> clearOriginalData >> toggleEditable
+
+        deactivatedTransaction txnId transactions =
+            List.map (filteredIdentityMapper (toggleableRow txnId True) deactivateEditor) transactions
     in
     case message of
         Noop ->
@@ -104,12 +110,12 @@ update message model =
             ( model, Cmd.none )
 
         Click txnId domId ->
-            ( { model | transactions = List.map (toggleEditable False txnId << captureOriginalData) model.transactions }
+            ( { model | transactions = List.map (filteredIdentityMapper (toggleableRow txnId False) (toggleEditable << captureOriginalData)) model.transactions }
             , Task.attempt (\_ -> Noop) (Browser.Dom.focus domId)
             )
 
         CancelEditor id ->
-            ( { model | transactions = List.map (deactivateEditor id) model.transactions }, Cmd.none )
+            ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
 
         SetDescription id desc ->
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
@@ -124,21 +130,19 @@ update message model =
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (\posting -> Nothing) }, Cmd.none )
 
         SaveChanges id ->
-            ( { model | transactions = List.map (toggle id << clearOriginalData) model.transactions }, Cmd.none )
+            ( { model | transactions = List.map (filteredIdentityMapper (toggleableRow id True) toggleEditable) model.transactions }, saveChanges (model.transactions |> List.filter (\txn -> txn.id == id) |> List.head) )
+
+        ChangesSaved id (Ok updatedTxn) ->
+            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions }, Cmd.none )
+
+        ChangesSaved id (Err error) ->
+            -- TODO: display an error
+            ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
 
 
-toggleEditable : Bool -> Int -> Transaction -> Transaction
-toggleEditable curState id transaction =
-    if transaction.id == id && transaction.editable == curState then
-        case curState of
-            True ->
-                { transaction | editable = not transaction.editable }
-
-            False ->
-                { transaction | editable = not transaction.editable }
-
-    else
-        transaction
+toggleEditable : Transaction -> Transaction
+toggleEditable transaction =
+    { transaction | editable = not transaction.editable }
 
 
 restoreOriginalData : Transaction -> Transaction
@@ -149,6 +153,19 @@ restoreOriginalData transaction =
 captureOriginalData : Transaction -> Transaction
 captureOriginalData transaction =
     { transaction | originalData = Just transaction.data }
+
+
+{-| Returns a mapper function that is an identity mapper unless the
+filter function evaluates to True
+-}
+filteredIdentityMapper : (a -> Bool) -> (a -> a) -> (a -> a)
+filteredIdentityMapper filterFn mapFn =
+    \v ->
+        if filterFn v then
+            mapFn v
+
+        else
+            v
 
 
 clearOriginalData : Transaction -> Transaction
@@ -252,6 +269,43 @@ updatePostingAmount amount posting =
 -- Encoders & Decoders
 
 
+encodeTransaction : Transaction -> Encode.Value
+encodeTransaction transaction =
+    Encode.object
+        [ ( "id", Encode.int transaction.id )
+        , ( "date", Encode.string transaction.date )
+        , ( "data", encodeTransactionData transaction.data )
+        ]
+
+
+encodeTransactionData : TransactionData -> Encode.Value
+encodeTransactionData data =
+    Encode.object
+        [ ( "description", Encode.string data.description )
+        , ( "postings", Encode.list encodePosting (List.filter (emptyPosting >> not) data.postings) )
+        ]
+
+
+encodePosting : Posting -> Encode.Value
+encodePosting posting =
+    [ maybeEncodeField "id" Encode.int posting.id
+    , maybeEncodeField "category" Encode.string posting.category
+    , Just ( "amountCents", Encode.int posting.amountCents )
+    ]
+        |> List.filterMap (\v -> v)
+        |> Encode.object
+
+
+maybeEncodeField : String -> (a -> Encode.Value) -> Maybe a -> Maybe ( String, Value )
+maybeEncodeField fieldName encoder value =
+    case value of
+        Just val ->
+            Just ( fieldName, encoder val )
+
+        Nothing ->
+            Nothing
+
+
 decodedPosting : Int -> String -> Int -> Posting
 decodedPosting id category amountCents =
     Posting (Just id) (Just category) amountCents
@@ -260,16 +314,16 @@ decodedPosting id category amountCents =
 postingDecoder : Decoder Posting
 postingDecoder =
     map3 decodedPosting
-        (field "id" int)
-        (field "category" string)
-        (field "amountCents" int)
+        (field "id" Decode.int)
+        (field "category" Decode.string)
+        (field "amountCents" Decode.int)
 
 
 transactionDataDecoder : Decoder TransactionData
 transactionDataDecoder =
     map2 decodedTransactionData
-        (field "description" string)
-        (field "postings" (list postingDecoder))
+        (field "description" Decode.string)
+        (field "postings" (Decode.list postingDecoder))
 
 
 decodedTransaction : Int -> String -> TransactionData -> Transaction
@@ -285,9 +339,16 @@ decodedTransactionData description postings =
 transactionDecoder : Decoder Transaction
 transactionDecoder =
     map3 decodedTransaction
-        (field "id" int)
-        (field "date" string)
+        (field "id" Decode.int)
+        (field "date" Decode.string)
         (field "data" transactionDataDecoder)
+
+
+saveTransactionDecoder : Decoder Transaction
+saveTransactionDecoder =
+    map2 (\status txn -> txn)
+        (field "status" Decode.string)
+        (field "transaction" transactionDecoder)
 
 
 
@@ -298,8 +359,26 @@ getTransactions : Cmd Msg
 getTransactions =
     Http.get
         { url = "http://localhost:4567/transactions"
-        , expect = Http.expectJson NewTransactions (list transactionDecoder)
+        , expect = Http.expectJson NewTransactions (Decode.list transactionDecoder)
         }
+
+
+saveChanges : Maybe Transaction -> Cmd Msg
+saveChanges transaction =
+    case transaction of
+        Nothing ->
+            Cmd.none
+
+        Just txn ->
+            Http.request
+                { method = "PUT"
+                , headers = []
+                , url = Url.Builder.crossOrigin "http://localhost:4567" [ "transactions", String.fromInt txn.id ] []
+                , body = Http.jsonBody (encodeTransaction txn)
+                , expect = Http.expectJson (ChangesSaved txn.id) saveTransactionDecoder
+                , timeout = Nothing
+                , tracker = Nothing
+                }
 
 
 
@@ -349,7 +428,7 @@ clicker transaction =
     let
         -- decoder that extracts the event.target.id property from the onClick event
         decoder =
-            Json.Decode.map (Click transaction.id) (Json.Decode.at [ "target", "id" ] Json.Decode.string)
+            Decode.map (Click transaction.id) (Decode.at [ "target", "id" ] Decode.string)
     in
     on "click" decoder
 
@@ -495,20 +574,20 @@ editorKeyHandler escMsg enterMsg =
     on "keyup" <|
         -- takes the anonymous function that produces a Decoder Msg & keyCode (a Decoder Int) and
         -- returns the Decoder Msg that is used by the keyup hanlder
-        Json.Decode.andThen
+        Decode.andThen
             -- this function takes the keyCode and returns a different Decoder Msg depending on
             -- what the keyCode was (the keyCode parameter is different than keyCode decoder below)
             (\keyCode ->
                 if keyCode == 13 then
                     -- on Enter
-                    Json.Decode.succeed enterMsg
+                    Decode.succeed enterMsg
 
                 else if keyCode == 27 then
                     -- on ESC
-                    Json.Decode.succeed escMsg
+                    Decode.succeed escMsg
 
                 else
-                    Json.Decode.fail (String.fromInt keyCode)
+                    Decode.fail (String.fromInt keyCode)
             )
             keyCode
 
