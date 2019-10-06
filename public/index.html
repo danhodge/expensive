@@ -9,9 +9,10 @@
 <body>
   <div id="elm">
     <script>
+      // TODO: load categories from the server
       var app = Elm.Transactions.init({
         node: document.getElementById('elm'),
-        flags: { data: "flags" }
+        flags: { categories: ["Expenses:Food:Restaurant", "Expenses:Food:Dog", "Income:Rebates"] }
       });
     </script>
   </div>

@@ -19,6 +19,7 @@ import Url.Builder
 
 type alias Model =
     { transactions : List Transaction
+    , categories : List String -- TODO: Update categories on edit
     }
 
 
@@ -56,18 +57,18 @@ type alias Transaction =
 
 
 type alias Flags =
-    { data : String
+    { categories : List String
     }
 
 
 initialModel : Model
 initialModel =
-    { transactions = [] }
+    { transactions = [], categories = [] }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( initialModel, getTransactions )
+    ( { initialModel | categories = flags.categories }, getTransactions )
 
 
 
@@ -389,11 +390,19 @@ saveChanges transaction =
 
 view : Model -> Html Msg
 view model =
-    table []
-        -- there has to be a better way to do this
-        ([ tableRow th [ "Date", "Description", "Amount", "Status", "Postings" ] ]
-            ++ transactionRows model.transactions
-        )
+    div []
+        [ datalist [ id "categories-list" ]
+            (List.map
+                (\name -> option [] [ text name ])
+                model.categories
+            )
+        , table
+            []
+            -- there has to be a better way to do this
+            ([ tableRow th [ "Date", "Description", "Amount", "Status", "Postings" ] ]
+                ++ transactionRows model.transactions
+            )
+        ]
 
 
 tableRow : (List (Attribute Msg) -> List (Html Msg) -> Html Msg) -> List String -> Html Msg
@@ -490,11 +499,14 @@ postingRow : Transaction -> Int -> Posting -> Html Msg
 postingRow transaction postingIndex posting =
     let
         displayText =
-            postingText posting
+            postingText transaction.editable posting
+
+        domId idPrefix =
+            inputId (inputId idPrefix transaction.id) postingIndex
 
         cells =
-            [ td [] [ postingEditor SetPostingName transaction postingIndex "posting-desc-" displayText ]
-            , td [] [ postingEditor SetPostingAmount transaction postingIndex "posting-amt-" (posting.amountCents |> toCurrency) ]
+            [ td [] [ postingEditor (SetPostingName transaction.id postingIndex) transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list" ] ]
+            , td [] [ postingEditor (SetPostingAmount transaction.id postingIndex) transaction (domId "posting-amt-") (posting.amountCents |> toCurrency) [] ]
             ]
 
         controls =
@@ -520,30 +532,32 @@ emptyPosting posting =
             False
 
 
-postingText : Posting -> String
-postingText posting =
+postingText : Bool -> Posting -> String
+postingText editable posting =
     case posting.category of
         Just value ->
             value
 
         Nothing ->
-            "Choose a Category"
+            if editable then
+                ""
+
+            else
+                "Choose a Category"
 
 
-postingEditor : (Int -> Int -> String -> Msg) -> Transaction -> Int -> String -> String -> Html Msg
-postingEditor saveMsg transaction postingIndex idPrefix displayText =
-    let
-        domId =
-            inputId (inputId idPrefix transaction.id) postingIndex
-    in
+postingEditor : (String -> Msg) -> Transaction -> String -> String -> List (Attribute Msg) -> Html Msg
+postingEditor saveMsg transaction domId displayText attributes =
     if transaction.editable then
         input
-            [ type_ "text"
-            , value displayText
-            , onInput (saveMsg transaction.id postingIndex)
-            , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
-            , id domId
-            ]
+            ([ type_ "text"
+             , value displayText
+             , onInput saveMsg
+             , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
+             , id domId
+             ]
+                ++ attributes
+            )
             []
 
     else
