@@ -73,9 +73,9 @@ put "/transactions/:id" do
     new_txn[:data][:postings].each do |posting|
       posting[:id] ||= next_id
     end
-    transactions[id] = new_txn
+    transactions[id][:data] = new_txn[:data]
 
-    { status: "OK", transaction: new_txn }.to_json.tap { |b| puts "RESP = #{b}" }
+    { status: "OK", transaction: { id: id }.merge(transactions[id]) }.to_json.tap { |b| puts "RESP = #{b}" }
   else
     status 404
   end

@@ -19,7 +19,7 @@ import Url.Builder
 
 type alias Model =
     { transactions : List Transaction
-    , categories : List String -- TODO: Update categories on edit
+    , categories : List String
     }
 
 
@@ -135,7 +135,7 @@ update message model =
             ( { model | transactions = List.map (filteredIdentityMapper (toggleableRow id True) toggleEditable) model.transactions }, saveChanges (model.transactions |> List.filter (\txn -> txn.id == id) |> List.head) )
 
         ChangesSaved id (Ok updatedTxn) ->
-            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions }, Cmd.none )
+            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (Debug.log "Stuff" (List.filterMap .category updatedTxn.data.postings)) model.categories }, Cmd.none )
 
         ChangesSaved id (Err error) ->
             -- TODO: display an error
@@ -265,6 +265,19 @@ updatePostingCategory catg posting =
 updatePostingAmount : String -> Posting -> Posting
 updatePostingAmount amount posting =
     { posting | amountCents = toCents amount }
+
+
+insertCategory : List String -> List String -> List String
+insertCategory transactionCategories existingCategories =
+    let
+        newCategories =
+            List.filter (\category -> not (List.member category existingCategories)) transactionCategories
+    in
+    if List.isEmpty (Debug.log "newCats" newCategories) then
+        existingCategories
+
+    else
+        List.sort (List.append newCategories existingCategories)
 
 
 
