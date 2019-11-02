@@ -2,6 +2,7 @@ module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialM
 
 import Browser
 import Browser.Dom
+import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
@@ -219,6 +220,7 @@ ensureEmptyPosting postings =
         postings
 
     else
+        -- TODO: defaualt amount to remaining balance
         postings ++ [ Posting Nothing Nothing 0 ]
 
 
@@ -466,7 +468,7 @@ transactionDescription transaction =
             [ type_ "text"
             , value transaction.data.description
             , onInput (SetDescription transaction.id)
-            , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
+            , editorKeyHandler (Dict.fromList [ ( 27, CancelEditor transaction.id ), ( 13, SaveChanges transaction.id ) ])
             , id (descInputId transaction.id)
             ]
             []
@@ -518,8 +520,8 @@ postingRow transaction postingIndex posting =
             inputId (inputId idPrefix transaction.id) postingIndex
 
         cells =
-            [ td [] [ postingEditor (SetPostingName transaction.id postingIndex) transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list" ] ]
-            , td [] [ postingEditor (SetPostingAmount transaction.id postingIndex) transaction (domId "posting-amt-") (posting.amountCents |> toCurrency) [] ]
+            [ td [] [ postingCategoryEditor transaction postingIndex domId displayText ]
+            , td [] [ postingAmountEditor transaction postingIndex domId posting ]
             ]
 
         controls =
@@ -559,14 +561,28 @@ postingText editable posting =
                 "Choose a Category"
 
 
-postingEditor : (String -> Msg) -> Transaction -> String -> String -> List (Attribute Msg) -> Html Msg
-postingEditor saveMsg transaction domId displayText attributes =
+postingCategoryEditor : Transaction -> Int -> (String -> String) -> String -> Html Msg
+postingCategoryEditor transaction postingIndex domId displayText =
+    postingEditor (SetPostingName transaction.id postingIndex) transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ] Dict.empty
+
+
+postingAmountEditor : Transaction -> Int -> (String -> String) -> Posting -> Html Msg
+postingAmountEditor transaction postingIndex domId posting =
+    postingEditor (SetPostingAmount transaction.id postingIndex) transaction (domId "posting-amt-") (posting.amountCents |> toCurrency) [] (Dict.fromList [ ( 13, SaveChanges transaction.id ) ])
+
+
+postingEditor : (String -> Msg) -> Transaction -> String -> String -> List (Attribute Msg) -> Dict Int Msg -> Html Msg
+postingEditor saveMsg transaction domId displayText attributes additionalKeys =
+    let
+        editorKeys =
+            Dict.union (Dict.fromList [ ( 27, CancelEditor transaction.id ) ]) additionalKeys
+    in
     if transaction.editable then
         input
             ([ type_ "text"
              , value displayText
              , onInput saveMsg
-             , editorKeyHandler (CancelEditor transaction.id) (SaveChanges transaction.id)
+             , editorKeyHandler editorKeys
              , id domId
              ]
                 ++ attributes
@@ -583,7 +599,11 @@ toCurrency amountCents =
         ( dollars, cents ) =
             toDollarsCents amountCents
     in
-    String.join "." [ String.fromInt dollars, String.fromInt cents |> String.padLeft 2 '0' ]
+    if amountCents == 0 then
+        ""
+
+    else
+        String.join "." [ String.fromInt dollars, String.fromInt cents |> String.padLeft 2 '0' ]
 
 
 toDollarsCents : Int -> ( Int, Int )
@@ -614,27 +634,25 @@ descInputId id =
     inputId "desc-" id
 
 
-editorKeyHandler : Msg -> Msg -> Attribute Msg
-editorKeyHandler escMsg enterMsg =
+editorKeyHandler : Dict Int Msg -> Attribute Msg
+editorKeyHandler keys =
     on "keyup" <|
         -- takes the anonymous function that produces a Decoder Msg & keyCode (a Decoder Int) and
         -- returns the Decoder Msg that is used by the keyup hanlder
         Decode.andThen
-            -- this function takes the keyCode and returns a different Decoder Msg depending on
-            -- what the keyCode was (the keyCode parameter is different than keyCode decoder below)
-            (\keyCode ->
-                if keyCode == 13 then
-                    -- on Enter
-                    Decode.succeed enterMsg
-
-                else if keyCode == 27 then
-                    -- on ESC
-                    Decode.succeed escMsg
-
-                else
-                    Decode.fail (String.fromInt keyCode)
-            )
+            (\keyCode -> keyCodeToMsg keys keyCode)
             keyCode
+
+
+keyCodeToMsg : Dict Int Msg -> Int -> Decoder Msg
+keyCodeToMsg keys keyCode =
+    -- takes the keyCode and returns a different Decoder Msg depending on what it is
+    case Dict.get keyCode keys of
+        Just msg ->
+            Decode.succeed msg
+
+        Nothing ->
+            Decode.fail (String.fromInt keyCode)
 
 
 
