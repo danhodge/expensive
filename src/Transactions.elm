@@ -24,15 +24,24 @@ type alias Model =
     }
 
 
+type Currency
+    = CurrencyDisplay String
+    | CurrencyValue Int
+
+
+type Message
+    = Error String
+
+
 type alias Posting =
     { id : Maybe Int
     , category : Maybe String
-    , amountCents : Int
+    , amount : Currency
     }
 
 
 
--- TransactionData = the data in a transaction that is editable
+-- TransactionData = the data in a transaction that are editable
 
 
 type alias TransactionData =
@@ -118,12 +127,14 @@ update message model =
             )
 
         CancelEditor id ->
+            -- TODO: set focus to the amount of the last posting
             ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
 
         SetDescription id desc ->
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
 
         SetPostingName id postIdx name ->
+            -- TODO: Detect when PostingName is set to an existing category by pressing Enter on auto-complete list and shift focus to the amount
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name >> justify) }, Cmd.none )
 
         SetPostingAmount id postIdx amount ->
@@ -133,10 +144,28 @@ update message model =
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (\posting -> Nothing) }, Cmd.none )
 
         SaveChanges id ->
-            ( { model | transactions = List.map (filteredIdentityMapper (toggleableRow id True) toggleEditable) model.transactions }, saveChanges (model.transactions |> List.filter (\txn -> txn.id == id) |> List.head) )
+            let
+                transaction =
+                    model.transactions |> List.filter (\txn -> txn.id == id) |> List.head
+
+                errors =
+                    case transaction of
+                        Just txn ->
+                            validateForSave txn
+
+                        Nothing ->
+                            []
+            in
+            case errors of
+                f :: _ ->
+                    -- TODO: include error message in the model
+                    ( model, Cmd.none )
+
+                [] ->
+                    ( model, saveChanges transaction )
 
         ChangesSaved id (Ok updatedTxn) ->
-            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (Debug.log "Stuff" (List.filterMap .category updatedTxn.data.postings)) model.categories }, Cmd.none )
+            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap .category updatedTxn.data.postings) model.categories }, Cmd.none )
 
         ChangesSaved id (Err error) ->
             -- TODO: display an error
@@ -146,6 +175,57 @@ update message model =
 toggleEditable : Transaction -> Transaction
 toggleEditable transaction =
     { transaction | editable = not transaction.editable }
+
+
+validateForSave : Transaction -> List Message
+validateForSave transaction =
+    let
+        fn posting =
+            case posting.amount of
+                CurrencyDisplay value ->
+                    case fromCurrency value of
+                        Just _ ->
+                            Nothing
+
+                        Nothing ->
+                            Just (Error ("Invalid currency amount " ++ value))
+
+                CurrencyValue _ ->
+                    Nothing
+    in
+    List.filterMap fn transaction.data.postings
+
+
+convertPostingAmounts : Transaction -> Transaction
+convertPostingAmounts transaction =
+    let
+        curData =
+            transaction.data
+
+        updatedData =
+            { curData | postings = List.map convertPostingAmount curData.postings }
+    in
+    { transaction | data = updatedData }
+
+
+convertPostingAmount : Posting -> Posting
+convertPostingAmount posting =
+    let
+        convertedAmount =
+            case posting.amount of
+                CurrencyValue cents ->
+                    CurrencyValue cents
+
+                CurrencyDisplay amount ->
+                    case fromCurrency amount of
+                        Just cents ->
+                            CurrencyValue cents
+
+                        Nothing ->
+                            -- TODO: error here? a third type?
+                            CurrencyDisplay amount
+    in
+    { posting | amount = convertedAmount }
 
 
 restoreOriginalData : Transaction -> Transaction
@@ -221,7 +301,7 @@ ensureEmptyPosting postings =
 
     else
         -- TODO: defaualt amount to remaining balance
-        postings ++ [ Posting Nothing Nothing 0 ]
+        postings ++ [ Posting Nothing Nothing (CurrencyValue 0) ]
 
 
 updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
@@ -266,7 +346,7 @@ updatePostingCategory catg posting =
 
 updatePostingAmount : String -> Posting -> Posting
 updatePostingAmount amount posting =
-    { posting | amountCents = toCents amount }
+    { posting | amount = CurrencyDisplay amount }
 
 
 insertCategory : List String -> List String -> List String
@@ -305,9 +385,24 @@ encodeTransactionData data =
 
 encodePosting : Posting -> Encode.Value
 encodePosting posting =
+    let
+        amountCents =
+            case posting.amount of
+                CurrencyDisplay val ->
+                    case fromCurrency val of
+                        Just amount ->
+                            amount
+
+                        -- TODO: fail or prevent execution from getting here if this is going to happen
+                        Nothing ->
+                            0
+
+                CurrencyValue amount ->
+                    amount
+    in
     [ maybeEncodeField "id" Encode.int posting.id
     , maybeEncodeField "category" Encode.string posting.category
-    , Just ( "amountCents", Encode.int posting.amountCents )
+    , Just ( "amountCents", Encode.int amountCents )
     ]
         |> List.filterMap (\v -> v)
         |> Encode.object
@@ -325,7 +420,7 @@ maybeEncodeField fieldName encoder value =
 
 decodedPosting : Int -> String -> Int -> Posting
 decodedPosting id category amountCents =
-    Posting (Just id) (Just category) amountCents
+    Posting (Just id) (Just category) (CurrencyValue amountCents)
 
 
 postingDecoder : Decoder Posting
@@ -480,8 +575,16 @@ transactionDescription transaction =
 transactionStatus : Transaction -> Html Msg
 transactionStatus transaction =
     let
+        extractAmount posting =
+            case posting.amount of
+                CurrencyDisplay val ->
+                    Maybe.withDefault 0 (fromCurrency val)
+
+                CurrencyValue amountCents ->
+                    amountCents
+
         balance =
-            transaction.amountCents + List.foldl (+) 0 (List.map .amountCents transaction.data.postings)
+            transaction.amountCents + List.foldl (+) 0 (List.map extractAmount transaction.data.postings)
     in
     case balance of
         0 ->
@@ -541,7 +644,12 @@ emptyPosting : Posting -> Bool
 emptyPosting posting =
     case posting.category of
         Nothing ->
-            abs posting.amountCents == 0
+            case posting.amount of
+                CurrencyDisplay val ->
+                    String.isEmpty val
+
+                CurrencyValue amount ->
+                    abs amount == 0
 
         Just value ->
             False
@@ -568,7 +676,16 @@ postingCategoryEditor transaction postingIndex domId displayText =
 
 postingAmountEditor : Transaction -> Int -> (String -> String) -> Posting -> Html Msg
 postingAmountEditor transaction postingIndex domId posting =
-    postingEditor (SetPostingAmount transaction.id postingIndex) transaction (domId "posting-amt-") (posting.amountCents |> toCurrency) [] (Dict.fromList [ ( 13, SaveChanges transaction.id ) ])
+    let
+        postingAmount =
+            case posting.amount of
+                CurrencyDisplay val ->
+                    val
+
+                CurrencyValue cents ->
+                    toCurrency cents
+    in
+    postingEditor (SetPostingAmount transaction.id postingIndex) transaction (domId "posting-amt-") postingAmount [] (Dict.fromList [ ( 13, SaveChanges transaction.id ) ])
 
 
 postingEditor : (String -> Msg) -> Transaction -> String -> String -> List (Attribute Msg) -> Dict Int Msg -> Html Msg
@@ -593,6 +710,13 @@ postingEditor saveMsg transaction domId displayText attributes additionalKeys =
         span (clickable transaction domId) [ text displayText ]
 
 
+
+-- TODO: how to capture the input as a string but still validate it?
+-- on load - convert cents into currency string
+-- on update - update the string - convert it back into cents for balance computation but do not fail on error
+-- on save - validate the string and refuse to save if not valid
+
+
 toCurrency : Int -> String
 toCurrency amountCents =
     let
@@ -600,10 +724,16 @@ toCurrency amountCents =
             toDollarsCents amountCents
     in
     if amountCents == 0 then
+        -- TODO: do not display an empty string for a posting that is being edited
         ""
 
     else
         String.join "." [ String.fromInt dollars, String.fromInt cents |> String.padLeft 2 '0' ]
+
+
+fromCurrency : String -> Maybe Int
+fromCurrency currency =
+    currency |> String.toFloat |> Maybe.map (\value -> round (value * 100))
 
 
 toDollarsCents : Int -> ( Int, Int )
