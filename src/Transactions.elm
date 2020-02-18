@@ -18,9 +18,18 @@ import Url.Builder
 -- MODEL
 
 
+type alias Category =
+    String
+
+
+type CategorySetting
+    = CategorySetting Category
+    | NoCategory
+
+
 type alias Model =
     { transactions : List Transaction
-    , categories : List String
+    , categories : List Category
     }
 
 
@@ -30,12 +39,13 @@ type Currency
 
 
 type Message
-    = Error String
+    = Message String
+    | Error String
 
 
 type alias Posting =
     { id : Maybe Int
-    , category : Maybe String
+    , category : CategorySetting
     , amount : Currency
     }
 
@@ -67,7 +77,7 @@ type alias Transaction =
 
 
 type alias Flags =
-    { categories : List String
+    { categories : List Category
     }
 
 
@@ -91,7 +101,7 @@ type Msg
     | Click Int String
     | CancelEditor Int
     | SetDescription Int String
-    | SetPostingName Int Int String
+    | SetPostingName Int Int CategorySetting
     | SetPostingAmount Int Int String
     | RemovePosting Int Int
     | SaveChanges Int
@@ -133,9 +143,9 @@ update message model =
         SetDescription id desc ->
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
 
-        SetPostingName id postIdx name ->
+        SetPostingName id postIdx category ->
             -- TODO: Detect when PostingName is set to an existing category by pressing Enter on auto-complete list and shift focus to the amount
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory name >> justify) }, Cmd.none )
+            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory category >> justify) }, Cmd.none )
 
         SetPostingAmount id postIdx amount ->
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount >> justify) }, Cmd.none )
@@ -165,7 +175,16 @@ update message model =
                     ( model, saveChanges transaction )
 
         ChangesSaved id (Ok updatedTxn) ->
-            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap .category updatedTxn.data.postings) model.categories }, Cmd.none )
+            let
+                nonEmptyCategory posting =
+                    case posting.category of
+                        CategorySetting category ->
+                            Just category
+
+                        _ ->
+                            Nothing
+            in
+            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap nonEmptyCategory updatedTxn.data.postings) model.categories }, Cmd.none )
 
         ChangesSaved id (Err error) ->
             -- TODO: display an error
@@ -301,7 +320,7 @@ ensureEmptyPosting postings =
 
     else
         -- TODO: defaualt amount to remaining balance
-        postings ++ [ Posting Nothing Nothing (CurrencyValue 0) ]
+        postings ++ [ Posting Nothing NoCategory (CurrencyValue 0) ]
 
 
 updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
@@ -339,9 +358,9 @@ updateMatchedTransaction transaction updatedPostings =
     { transaction | data = updatedData }
 
 
-updatePostingCategory : String -> Posting -> Posting
+updatePostingCategory : CategorySetting -> Posting -> Posting
 updatePostingCategory catg posting =
-    { posting | category = Just catg }
+    { posting | category = catg }
 
 
 updatePostingAmount : String -> Posting -> Posting
@@ -399,9 +418,17 @@ encodePosting posting =
 
                 CurrencyValue amount ->
                     amount
+
+        category =
+            case posting.category of
+                NoCategory ->
+                    ""
+
+                CategorySetting name ->
+                    name
     in
     [ maybeEncodeField "id" Encode.int posting.id
-    , maybeEncodeField "category" Encode.string posting.category
+    , Just ( "category", Encode.string category )
     , Just ( "amountCents", Encode.int amountCents )
     ]
         |> List.filterMap (\v -> v)
@@ -420,7 +447,15 @@ maybeEncodeField fieldName encoder value =
 
 decodedPosting : Int -> String -> Int -> Posting
 decodedPosting id category amountCents =
-    Posting (Just id) (Just category) (CurrencyValue amountCents)
+    let
+        catg =
+            if String.length category == 0 then
+                NoCategory
+
+            else
+                CategorySetting category
+    in
+    Posting (Just id) catg (CurrencyValue amountCents)
 
 
 postingDecoder : Decoder Posting
@@ -643,7 +678,7 @@ postingRow transaction postingIndex posting =
 emptyPosting : Posting -> Bool
 emptyPosting posting =
     case posting.category of
-        Nothing ->
+        NoCategory ->
             case posting.amount of
                 CurrencyDisplay val ->
                     String.isEmpty val
@@ -651,17 +686,17 @@ emptyPosting posting =
                 CurrencyValue amount ->
                     abs amount == 0
 
-        Just value ->
+        CategorySetting value ->
             False
 
 
 postingText : Bool -> Posting -> String
 postingText editable posting =
     case posting.category of
-        Just value ->
+        CategorySetting value ->
             value
 
-        Nothing ->
+        NoCategory ->
             if editable then
                 ""
 
@@ -671,7 +706,11 @@ postingText editable posting =
 
 postingCategoryEditor : Transaction -> Int -> (String -> String) -> String -> Html Msg
 postingCategoryEditor transaction postingIndex domId displayText =
-    postingEditor (SetPostingName transaction.id postingIndex) transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ] Dict.empty
+    let
+        saveMsg str =
+            SetPostingName transaction.id postingIndex (CategorySetting str)
+    in
+    postingEditor saveMsg transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ] Dict.empty
 
 
 postingAmountEditor : Transaction -> Int -> (String -> String) -> Posting -> Html Msg
