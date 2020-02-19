@@ -447,15 +447,7 @@ maybeEncodeField fieldName encoder value =
 
 decodedPosting : Int -> String -> Int -> Posting
 decodedPosting id category amountCents =
-    let
-        catg =
-            if String.length category == 0 then
-                NoCategory
-
-            else
-                CategorySetting category
-    in
-    Posting (Just id) catg (CurrencyValue amountCents)
+    Posting (Just id) (toCategorySetting category) (CurrencyValue amountCents)
 
 
 postingDecoder : Decoder Posting
@@ -704,11 +696,21 @@ postingText editable posting =
                 "Choose a Category"
 
 
+toCategorySetting : String -> CategorySetting
+toCategorySetting text =
+    case String.length text of
+        0 ->
+            NoCategory
+
+        _ ->
+            CategorySetting text
+
+
 postingCategoryEditor : Transaction -> Int -> (String -> String) -> String -> Html Msg
 postingCategoryEditor transaction postingIndex domId displayText =
     let
         saveMsg str =
-            SetPostingName transaction.id postingIndex (CategorySetting str)
+            SetPostingName transaction.id postingIndex (toCategorySetting str)
     in
     postingEditor saveMsg transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ] Dict.empty
 
