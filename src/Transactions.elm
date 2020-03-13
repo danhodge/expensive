@@ -27,15 +27,24 @@ type CategorySetting
     | NoCategory
 
 
+type alias Description =
+    String
+
+
+type alias Currency =
+    String
+
+
+type alias PostingId =
+    Int
+
+
+-- TODO: Maybe Model should be a tagged union?
 type alias Model =
     { transactions : List Transaction
     , categories : List Category
+    , status : Message
     }
-
-
-type Currency
-    = CurrencyDisplay String
-    | CurrencyValue Int
 
 
 type Message
@@ -43,31 +52,29 @@ type Message
     | Error String
 
 
-type alias Posting =
-    { id : Maybe Int
-    , category : CategorySetting
-    , amount : Currency
-    }
-
-
-
--- TransactionData = the data in a transaction that are editable
-
-
 type alias TransactionData =
-    { description : String
-    , postings : List Posting
-    }
-
-
-type alias Transaction =
     { id : Int
     , date : String
+    , description : Description
     , amountCents : Int
-    , editable : Bool
-    , data : TransactionData
-    , originalData : Maybe TransactionData
     }
+
+
+type alias PostingData =
+    { category : CategorySetting
+    , amountCents : Int
+    }
+
+
+type Transaction
+    = SavedTransaction (List Posting) TransactionData
+    | EditableSavedTransaction (List Posting) TransactionData Description
+
+
+type Posting
+    = SavedPosting PostingId PostingData
+    | EditablePosting PostingData Currency
+    | EditableSavedPosting PostingId PostingData Currency
 
 
 
@@ -100,7 +107,7 @@ type Msg
     | NewTransactions (Result Http.Error (List Transaction))
     | Click Int String
     | CancelEditor Int
-    | SetDescription Int String
+    | SetDescription Int Description
     | SetPostingName Int Int CategorySetting
     | SetPostingAmount Int Int String
     | RemovePosting Int Int
@@ -120,7 +127,7 @@ update message model =
         deactivatedTransaction txnId transactions =
             List.map (filteredIdentityMapper (toggleableRow txnId True) deactivateEditor) transactions
     in
-    case message of
+    ca se message of
         Noop ->
             ( model, Cmd.none )
 
@@ -193,58 +200,95 @@ update message model =
 
 toggleEditable : Transaction -> Transaction
 toggleEditable transaction =
-    { transaction | editable = not transaction.editable }
+    case transaction of
+        SavedTransaction postings data ->
+            EditableSavedTransaction (List.map toEditablePosting postings) data data.description
+
+        EditableSavedTransaction postings data _ ->
+            SavedTransaction (List.filterMap toSavedPosting postings) data
+
+
+toEditablePosting : Posting -> Posting
+toEditablePosting posting =
+    case posting of
+        SavedPosting id data ->
+            EditableSavedPosting id data (toCurrency data.amount)
+
+        _ ->
+            posting
+
+
+toSavedPosting : Posting -> Maybe Posting
+toSavedPosting posting =
+    case posting of
+        EditableSavedPosting id data currency ->
+            Just (SavedPosting id data)
+
+        SavedPosting id data ->
+            Just posting
+
+        EditablePosting data currency ->
+            Nothing
+
+
+
+-- type Posting
+--     = SavedPosting PostingId PostingData
+--     | EditablePosting PostingData Currency
+--     | EditableSavedPosting PostingId PostingData Currency
 
 
 validateForSave : Transaction -> List Message
 validateForSave transaction =
     let
-        fn posting =
-            case posting.amount of
-                CurrencyDisplay value ->
-                    case fromCurrency value of
-                        Just _ ->
-                            Nothing
-
-                        Nothing ->
-                            Just (Error ("Invalid currency amount " ++ value))
-
-                CurrencyValue _ ->
+        validateCurrencyAmount value =
+            case fromCurrency value of
+                Just _ ->
                     Nothing
+
+                Nothing ->
+                    Just (Error ("Invalid currency amount " ++ value))
+
+        validatePosting posting =
+            case posting of
+                SavedPosting _ _ ->
+                    Nothing
+
+                EditablePosting _ value ->
+                    validateCurrencyAmount value
+
+                EditableSavedPosting _ _ value ->
+                    validateCurrencyAmount value
     in
-    List.filterMap fn transaction.data.postings
+    List.filterMap validatePosting transaction.data.postings
 
 
-convertPostingAmounts : Transaction -> Transaction
-convertPostingAmounts transaction =
-    let
-        curData =
-            transaction.data
 
-        updatedData =
-            { curData | postings = List.map convertPostingAmount curData.postings }
-    in
-    { transaction | data = updatedData }
-
-
-convertPostingAmount : Posting -> Posting
-convertPostingAmount posting =
-    let
-        convertedAmount =
-            case posting.amount of
-                CurrencyValue cents ->
-                    CurrencyValue cents
-
-                CurrencyDisplay amount ->
-                    case fromCurrency amount of
-                        Just cents ->
-                            CurrencyValue cents
-
-                        Nothing ->
-                            -- TODO: error here? a third type?
-                            CurrencyDisplay amount
-    in
-    { posting | amount = convertedAmount }
+-- convertPostingAmounts : Transaction -> Transaction
+-- convertPostingAmounts transaction =
+--     let
+--         curData =
+--             transaction.data
+--         updatedData =
+--             { curData | postings = List.map convertPostingAmount curData.postings }
+--     in
+--     { transaction | data = updatedData }
+-- convertPostingAmount : Posting -> Posting
+-- convertPostingAmount posting =
+--     let
+--         convertedAmount =
+--             case posting.amount of
+--                 CurrencyValue cents ->
+--                     CurrencyValue cents
+--                 CurrencyDisplay amount ->
+--                     case fromCurrency amount of
+--                         Just cents ->
+--                             CurrencyValue cents
+--                         Nothing ->
+--                             -- TODO: error here? a third type?
+--                             CurrencyDisplay amount
+--     in
+--     { posting | amount = convertedAmount }
 
 
 restoreOriginalData : Transaction -> Transaction
@@ -320,7 +364,7 @@ ensureEmptyPosting postings =
 
     else
         -- TODO: defaualt amount to remaining balance
-        postings ++ [ Posting Nothing NoCategory (CurrencyValue 0) ]
+        postings ++ [ EditablePosting (PostingData NoCategory 0) "0" ]
 
 
 updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
@@ -365,7 +409,16 @@ updatePostingCategory catg posting =
 
 updatePostingAmount : String -> Posting -> Posting
 updatePostingAmount amount posting =
-    { posting | amount = CurrencyDisplay amount }
+    case posting of
+        SavedPosting _ _ ->
+            -- TODO: error here?
+            posting
+
+        EditablePosting data _ ->
+            EditablePosting data amount
+
+        EditableSavedPosting id data _ ->
+            EditableSavedPosting id data amount
 
 
 insertCategory : List String -> List String -> List String
@@ -383,6 +436,23 @@ insertCategory transactionCategories existingCategories =
 
 
 -- Encoders & Decoders
+-- type alias TransactionData =
+--     { id : Int
+--     , date : String
+--     , description : Description
+--     , amountCents : Int
+--     }
+-- type alias PostingData =
+--     { category : CategorySetting
+--     , amountCents : Int
+--     }
+-- type Transaction
+--     = SavedTransaction (List Posting) TransactionData
+--     | EditableSavedTransaction (List Posting) TransactionData Description
+-- type Posting
+--     = SavedPosting PostingId PostingData
+--     | EditablePosting PostingData Currency
+--     | EditableSavedPosting PostingId PostingData Currency
 
 
 encodeTransaction : Transaction -> Encode.Value
@@ -390,6 +460,7 @@ encodeTransaction transaction =
     Encode.object
         [ ( "id", Encode.int transaction.id )
         , ( "date", Encode.string transaction.date )
+        , ( "amountCents", Encode.int transaction.amountCents )
         , ( "data", encodeTransactionData transaction.data )
         ]
 
@@ -447,7 +518,7 @@ maybeEncodeField fieldName encoder value =
 
 decodedPosting : Int -> String -> Int -> Posting
 decodedPosting id category amountCents =
-    Posting (Just id) (toCategorySetting category) (CurrencyValue amountCents)
+    SavedPosting id PostingData (toCategorySetting category) amountCents
 
 
 postingDecoder : Decoder Posting
@@ -458,30 +529,19 @@ postingDecoder =
         (field "amountCents" Decode.int)
 
 
-transactionDataDecoder : Decoder TransactionData
-transactionDataDecoder =
-    map2 decodedTransactionData
-        (field "description" Decode.string)
-        (field "postings" (Decode.list postingDecoder))
-
-
-decodedTransaction : Int -> String -> Int -> TransactionData -> Transaction
-decodedTransaction id date amountCents data =
-    Transaction id date amountCents False data Nothing
-
-
-decodedTransactionData : String -> List Posting -> TransactionData
-decodedTransactionData description postings =
-    TransactionData description (ensureEmptyPosting postings)
+decodedTransaction : Int -> String -> Int -> Description -> List Posting -> Transaction
+decodedTransaction id date amountCents description postings =
+    SavedTransaction postings TransactionData id date description amountCents
 
 
 transactionDecoder : Decoder Transaction
 transactionDecoder =
-    map4 decodedTransaction
+    map5 decodedTransaction
         (field "id" Decode.int)
         (field "date" Decode.string)
         (field "amountCents" Decode.int)
-        (field "data" transactionDataDecoder)
+        (field "description" Decode.string)
+        (field "postings" (Decode.list postingDecoder))
 
 
 saveTransactionDecoder : Decoder Transaction
@@ -603,12 +663,15 @@ transactionStatus : Transaction -> Html Msg
 transactionStatus transaction =
     let
         extractAmount posting =
-            case posting.amount of
-                CurrencyDisplay val ->
-                    Maybe.withDefault 0 (fromCurrency val)
+            case posting of
+                SavedPosting id data ->
+                    data.amountCents
 
-                CurrencyValue amountCents ->
-                    amountCents
+                EditablePosting _ value ->
+                    Maybe.withDefault 0 (fromCurrency value)
+
+                EditableSavedPosting _ _ value ->
+                    Maybe.withDefault 0 (fromCurrency value)
 
         balance =
             transaction.amountCents + List.foldl (+) 0 (List.map extractAmount transaction.data.postings)

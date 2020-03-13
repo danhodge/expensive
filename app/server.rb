@@ -1,8 +1,11 @@
+# typed: false
 require 'sinatra'
+require 'pry-coolline'
 
 set :root, File.dirname(__FILE__)
 set :public_folder, File.expand_path("../public", File.dirname(__FILE__))
 set :static, true
+set :static_cache_control, [:public, max_age: 1]
 
 helpers do
   def next_id
@@ -14,43 +17,37 @@ helpers do
       next_id => {
         date: "2019-03-01",
         amountCents: -1000,
-        data: {
-          description: "Food",
-          postings: [
-            {
-              id: 10,
-              category: "Expenses:Food:Restaurant",
-              amountCents: 1000
-            }
-          ]
-        }
+        description: "Food",
+        postings: [
+          {
+            id: 10,
+            category: "Expenses:Food:Restaurant",
+            amountCents: 1000
+          }
+        ]
       },
       next_id => {
         date: "2019-03-02",
         amountCents: -3461,
-        data: {
-          description: "Gas",
-          postings: []
-        }
+        description: "Gas",
+        postings: []
       },
       next_id => {
         date: "2019-03-06",
         amountCents: -1499,
-        data: {
-          description: "Pets",
-          postings: [
-            {
-              id: next_id,
-              category: "Expenses:Food:Dog",
-              amountCents: 1999
-            },
-            {
-              id: next_id,
-              category: "Income:Rebates",
-              amountCents: -500
-            }
-          ]
-        }
+        description: "Pets",
+        postings: [
+          {
+            id: next_id,
+            category: "Expenses:Food:Dog",
+            amountCents: 1999
+          },
+          {
+            id: next_id,
+            category: "Income:Rebates",
+            amountCents: -500
+          }
+        ]
       }
     }
   end
@@ -70,10 +67,12 @@ put "/transactions/:id" do
   id = Integer(params[:id])
   if transactions.key?(id)
     new_txn = JSON.parse(request.body.read, symbolize_names: true)
-    new_txn[:data][:postings].each do |posting|
+    new_txn[:postings].each do |posting|
       posting[:id] ||= next_id
     end
-    transactions[id][:data] = new_txn[:data]
+    puts "BODY: #{new_txn.inspect}"
+    transactions[id][:description] = new_txn[:description]
+    transactions[id][:postings] = new_txn[:postings]
 
     { status: "OK", transaction: { id: id }.merge(transactions[id]) }.to_json.tap { |b| puts "RESP = #{b}" }
   else
