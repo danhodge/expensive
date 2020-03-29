@@ -39,7 +39,6 @@ type alias PostingId =
     Int
 
 
--- TODO: Maybe Model should be a tagged union?
 type alias Model =
     { transactions : List Transaction
     , categories : List Category
@@ -48,34 +47,36 @@ type alias Model =
 
 
 type Message
-    = Message String
+    = NoMessage
+    | Message String
     | Error String
 
 
-type alias TransactionData =
+
+type alias TransactionRecord =
     { id : Int
     , date : String
-    , description : Description
     , amountCents : Int
+    , data : TransactionData
     }
 
 
-type alias PostingData =
-    { category : CategorySetting
-    , amountCents : Int
+type alias TransactionData =
+    { description : Description
+    , postings : List Posting
+    }
+
+
+type alias Posting =
+    { id : Maybe PostingId
+    , category : CategorySetting
+    , amount : String
     }
 
 
 type Transaction
-    = SavedTransaction (List Posting) TransactionData
-    | EditableSavedTransaction (List Posting) TransactionData Description
-
-
-type Posting
-    = SavedPosting PostingId PostingData
-    | EditablePosting PostingData Currency
-    | EditableSavedPosting PostingId PostingData Currency
-
+    = SavedTransaction TransactionRecord
+    | EditableSavedTransaction TransactionRecord TransactionData
 
 
 -- used to pass data in from JS - couldn't figure out if it's possible to omit this
@@ -90,7 +91,7 @@ type alias Flags =
 
 initialModel : Model
 initialModel =
-    { transactions = [], categories = [] }
+    { transactions = [], categories = [], status = NoMessage }
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -111,23 +112,17 @@ type Msg
     | SetPostingName Int Int CategorySetting
     | SetPostingAmount Int Int String
     | RemovePosting Int Int
-    | SaveChanges Int
+    | SaveChanges Transaction
     | ChangesSaved Int (Result Http.Error Transaction)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     let
-        toggleableRow id curEditState txn =
-            txn.id == id && txn.editable == curEditState
-
-        deactivateEditor =
-            restoreOriginalData >> clearOriginalData >> toggleEditable
-
         deactivatedTransaction txnId transactions =
-            List.map (filteredIdentityMapper (toggleableRow txnId True) deactivateEditor) transactions
+            List.map (filteredIdentityMapper (andFn (matchTransactionId txnId) editableTransaction) restoreOriginalData) transactions
     in
-    ca se message of
+    case message of
         Noop ->
             ( model, Cmd.none )
 
@@ -139,7 +134,7 @@ update message model =
             ( model, Cmd.none )
 
         Click txnId domId ->
-            ( { model | transactions = List.map (filteredIdentityMapper (toggleableRow txnId False) (toggleEditable << captureOriginalData)) model.transactions }
+            ( { model | transactions = List.map (filteredIdentityMapper (matchTransactionId txnId) toggleEditable) model.transactions }
             , Task.attempt (\_ -> Noop) (Browser.Dom.focus domId)
             )
 
@@ -148,6 +143,7 @@ update message model =
             ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
 
         SetDescription id desc ->
+            -- TODO: why not just put the Transaction in message instead of the id?
             ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
 
         SetPostingName id postIdx category ->
@@ -160,18 +156,15 @@ update message model =
         RemovePosting id postIdx ->
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (\posting -> Nothing) }, Cmd.none )
 
-        SaveChanges id ->
+        SaveChanges txn ->
             let
-                transaction =
-                    model.transactions |> List.filter (\txn -> txn.id == id) |> List.head
+                errors = []
+                    -- case transaction of
+                    --     Just txn ->
+                    --         validateForSave txn
 
-                errors =
-                    case transaction of
-                        Just txn ->
-                            validateForSave txn
-
-                        Nothing ->
-                            []
+                    --     Nothing ->
+                    --         []
             in
             case errors of
                 f :: _ ->
@@ -179,7 +172,7 @@ update message model =
                     ( model, Cmd.none )
 
                 [] ->
-                    ( model, saveChanges transaction )
+                    ( model, saveChanges txn )
 
         ChangesSaved id (Ok updatedTxn) ->
             let
@@ -191,7 +184,7 @@ update message model =
                         _ ->
                             Nothing
             in
-            ( { model | transactions = List.map (filteredIdentityMapper (\txn -> txn.id == id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap nonEmptyCategory updatedTxn.data.postings) model.categories }, Cmd.none )
+            ( { model | transactions = List.map (filteredIdentityMapper (matchTransactionId id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap nonEmptyCategory (toRecord updatedTxn).data.postings) model.categories }, Cmd.none )
 
         ChangesSaved id (Err error) ->
             -- TODO: display an error
@@ -201,66 +194,36 @@ update message model =
 toggleEditable : Transaction -> Transaction
 toggleEditable transaction =
     case transaction of
-        SavedTransaction postings data ->
-            EditableSavedTransaction (List.map toEditablePosting postings) data data.description
+        SavedTransaction record ->
+            EditableSavedTransaction record record.data
 
-        EditableSavedTransaction postings data _ ->
-            SavedTransaction (List.filterMap toSavedPosting postings) data
-
-
-toEditablePosting : Posting -> Posting
-toEditablePosting posting =
-    case posting of
-        SavedPosting id data ->
-            EditableSavedPosting id data (toCurrency data.amount)
-
-        _ ->
-            posting
+        EditableSavedTransaction record originalData ->
+            SavedTransaction { record | data = originalData }
 
 
-toSavedPosting : Posting -> Maybe Posting
-toSavedPosting posting =
-    case posting of
-        EditableSavedPosting id data currency ->
-            Just (SavedPosting id data)
+-- validateForSave : Transaction -> List Message
+-- validateForSave transaction =
+--     let
+--         validateCurrencyAmount value =
+--             case fromCurrency value of
+--                 Just _ ->
+--                     Nothing
 
-        SavedPosting id data ->
-            Just posting
+--                 Nothing ->
+--                     Just (Error ("Invalid currency amount " ++ value))
 
-        EditablePosting data currency ->
-            Nothing
+--         validatePosting posting =
+--             case posting of
+--                 SavedPosting _ _ ->
+--                     Nothing
 
+--                 EditablePosting _ value ->
+--                     validateCurrencyAmount value
 
-
--- type Posting
---     = SavedPosting PostingId PostingData
---     | EditablePosting PostingData Currency
---     | EditableSavedPosting PostingId PostingData Currency
-
-
-validateForSave : Transaction -> List Message
-validateForSave transaction =
-    let
-        validateCurrencyAmount value =
-            case fromCurrency value of
-                Just _ ->
-                    Nothing
-
-                Nothing ->
-                    Just (Error ("Invalid currency amount " ++ value))
-
-        validatePosting posting =
-            case posting of
-                SavedPosting _ _ ->
-                    Nothing
-
-                EditablePosting _ value ->
-                    validateCurrencyAmount value
-
-                EditableSavedPosting _ _ value ->
-                    validateCurrencyAmount value
-    in
-    List.filterMap validatePosting transaction.data.postings
+--                 EditableSavedPosting _ _ value ->
+--                     validateCurrencyAmount value
+--     in
+--     List.filterMap validatePosting transaction.data.postings
 
 
 
@@ -293,12 +256,22 @@ validateForSave transaction =
 
 restoreOriginalData : Transaction -> Transaction
 restoreOriginalData transaction =
-    { transaction | data = Maybe.withDefault transaction.data transaction.originalData }
+    case transaction of
+        SavedTransaction _ ->
+            transaction
+
+        EditableSavedTransaction record originalData ->
+            SavedTransaction { record | data = originalData }
 
 
-captureOriginalData : Transaction -> Transaction
-captureOriginalData transaction =
-    { transaction | originalData = Just transaction.data }
+matchTransactionId : Int -> Transaction -> Bool
+matchTransactionId id txn =
+    (txn |> toRecord |> .id) == id
+
+
+andFn : (a -> Bool) -> (a -> Bool) -> (a -> Bool)
+andFn f g =
+    \v -> f v && g v
 
 
 {-| Returns a mapper function that is an identity mapper unless the
@@ -314,28 +287,30 @@ filteredIdentityMapper filterFn mapFn =
             v
 
 
-clearOriginalData : Transaction -> Transaction
-clearOriginalData transaction =
-    { transaction | originalData = Nothing }
-
-
 updateTransactionDescription : String -> Transaction -> Transaction
 updateTransactionDescription desc transaction =
-    let
-        curData =
-            transaction.data
+    updateTransactionData transaction (\data -> { data | description = desc })
 
-        updatedData =
-            { curData | description = desc }
-    in
-    { transaction | data = updatedData }
+
+updateTransactionData : Transaction -> (TransactionData -> TransactionData) -> Transaction
+updateTransactionData transaction updateFn =
+    case transaction of
+        SavedTransaction _ ->
+            transaction
+
+        EditableSavedTransaction record originalData ->
+            let
+                curData =
+                    record.data
+            in
+            EditableSavedTransaction { record | data = (updateFn curData) } originalData
 
 
 updateTransaction : List Transaction -> Int -> (Transaction -> Transaction) -> List Transaction
 updateTransaction transactions id updateFn =
     let
         matchIdUpdateFn txn =
-            if txn.id == id then
+            if matchTransactionId id txn then
                 updateFn txn
 
             else
@@ -364,7 +339,7 @@ ensureEmptyPosting postings =
 
     else
         -- TODO: defaualt amount to remaining balance
-        postings ++ [ EditablePosting (PostingData NoCategory 0) "0" ]
+        postings ++ [ Posting Nothing NoCategory "0" ]
 
 
 updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
@@ -385,21 +360,14 @@ updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Mayb
 updateTransactionAndPosting transactions txnId postIdx updatePostingFn =
     let
         updateTxnFn transaction =
-            updateMatchedTransaction transaction ((updatePosting postIdx updatePostingFn >> ensureEmptyPosting) transaction.data.postings)
+            updateMatchedTransaction transaction ((updatePosting postIdx updatePostingFn >> ensureEmptyPosting) (transaction |> toRecord |> .data |> .postings))
     in
     updateTransaction transactions txnId updateTxnFn
 
 
 updateMatchedTransaction : Transaction -> List Posting -> Transaction
 updateMatchedTransaction transaction updatedPostings =
-    let
-        curData =
-            transaction.data
-
-        updatedData =
-            { curData | postings = updatedPostings }
-    in
-    { transaction | data = updatedData }
+    updateTransactionData transaction (\data -> { data | postings = updatedPostings })
 
 
 updatePostingCategory : CategorySetting -> Posting -> Posting
@@ -409,16 +377,7 @@ updatePostingCategory catg posting =
 
 updatePostingAmount : String -> Posting -> Posting
 updatePostingAmount amount posting =
-    case posting of
-        SavedPosting _ _ ->
-            -- TODO: error here?
-            posting
-
-        EditablePosting data _ ->
-            EditablePosting data amount
-
-        EditableSavedPosting id data _ ->
-            EditableSavedPosting id data amount
+    { posting | amount = amount }
 
 
 insertCategory : List String -> List String -> List String
@@ -455,40 +414,63 @@ insertCategory transactionCategories existingCategories =
 --     | EditableSavedPosting PostingId PostingData Currency
 
 
-encodeTransaction : Transaction -> Encode.Value
+encodeTransaction : Transaction -> Result String Encode.Value
 encodeTransaction transaction =
-    Encode.object
-        [ ( "id", Encode.int transaction.id )
-        , ( "date", Encode.string transaction.date )
-        , ( "amountCents", Encode.int transaction.amountCents )
-        , ( "data", encodeTransactionData transaction.data )
-        ]
+    let
+        record =
+            toRecord transaction
+
+        dataResult =
+            encodeTransactionData record.data
+    in
+    case dataResult of
+        Ok value ->
+            Ok ([ ( "id", Encode.int record.id )
+               , ( "date", Encode.string record.date )
+               , ( "amountCents", Encode.int record.amountCents )
+               , ( "data", value )
+               ] |> Encode.object)
+
+        Err msg ->
+            dataResult
 
 
-encodeTransactionData : TransactionData -> Encode.Value
+encodeTransactionData : TransactionData -> Result String Encode.Value
 encodeTransactionData data =
-    Encode.object
-        [ ( "description", Encode.string data.description )
-        , ( "postings", Encode.list encodePosting (List.filter (emptyPosting >> not) data.postings) )
-        ]
+    let
+        postingResults =
+            List.map encodePosting (List.filter (emptyPosting >> not) data.postings)
+
+        onlyErrors v =
+            case v of
+                Ok _ -> Nothing
+                Err msg -> Just msg
+
+        onlySuccesses v =
+            case v of
+                Ok value -> Just value
+                Err _ -> Nothing
+
+        errorResults =
+            List.filterMap onlyErrors postingResults
+
+        successResults =
+            List.filterMap onlySuccesses postingResults
+
+    in
+    if (List.length errorResults) == 0 then
+        Ok (Encode.object
+            [ ( "description", Encode.string data.description )
+            , ( "postings", Encode.list (\a -> a) successResults )
+            ])
+    else
+        Err (List.foldr (++) "" errorResults)
 
 
-encodePosting : Posting -> Encode.Value
+encodePosting : Posting -> Result String Encode.Value
 encodePosting posting =
     let
-        amountCents =
-            case posting.amount of
-                CurrencyDisplay val ->
-                    case fromCurrency val of
-                        Just amount ->
-                            amount
-
-                        -- TODO: fail or prevent execution from getting here if this is going to happen
-                        Nothing ->
-                            0
-
-                CurrencyValue amount ->
-                    amount
+        amountCents = fromCurrency posting.amount
 
         category =
             case posting.category of
@@ -498,12 +480,17 @@ encodePosting posting =
                 CategorySetting name ->
                     name
     in
-    [ maybeEncodeField "id" Encode.int posting.id
-    , Just ( "category", Encode.string category )
-    , Just ( "amountCents", Encode.int amountCents )
-    ]
-        |> List.filterMap (\v -> v)
-        |> Encode.object
+    case amountCents of
+        Just cents ->
+            Ok ([ maybeEncodeField "id" Encode.int posting.id
+                , Just ( "category", Encode.string category )
+                , Just ( "amountCents", Encode.int cents )
+                ]
+                    |> List.filterMap (\v -> v)
+                    |> Encode.object)
+
+        Nothing ->
+            Err ("Cannot convert " ++ posting.amount ++ " into cents")
 
 
 maybeEncodeField : String -> (a -> Encode.Value) -> Maybe a -> Maybe ( String, Value )
@@ -518,7 +505,7 @@ maybeEncodeField fieldName encoder value =
 
 decodedPosting : Int -> String -> Int -> Posting
 decodedPosting id category amountCents =
-    SavedPosting id PostingData (toCategorySetting category) amountCents
+    Posting (Just id) (toCategorySetting category) (toCurrency amountCents)
 
 
 postingDecoder : Decoder Posting
@@ -531,7 +518,7 @@ postingDecoder =
 
 decodedTransaction : Int -> String -> Int -> Description -> List Posting -> Transaction
 decodedTransaction id date amountCents description postings =
-    SavedTransaction postings TransactionData id date description amountCents
+    SavedTransaction (TransactionRecord id date amountCents (TransactionData description postings))
 
 
 transactionDecoder : Decoder Transaction
@@ -563,23 +550,31 @@ getTransactions =
         }
 
 
-saveChanges : Maybe Transaction -> Cmd Msg
+saveChanges : Transaction -> Cmd Msg
 saveChanges transaction =
     case transaction of
-        Nothing ->
+        SavedTransaction _ ->
             Cmd.none
 
-        Just txn ->
-            Http.request
-                { method = "PUT"
-                , headers = []
-                , url = Url.Builder.crossOrigin "http://localhost:4567" [ "transactions", String.fromInt txn.id ] []
-                , body = Http.jsonBody (encodeTransaction txn)
-                , expect = Http.expectJson (ChangesSaved txn.id) saveTransactionDecoder
-                , timeout = Nothing
-                , tracker = Nothing
-                }
-
+        EditableSavedTransaction record _ ->
+            let
+                encodeResult =
+                    encodeTransaction transaction
+            in
+            case encodeResult of
+                Ok value ->
+                    Http.request
+                        { method = "PUT"
+                        , headers = []
+                        , url = Url.Builder.crossOrigin "http://localhost:4567" [ "transactions", String.fromInt record.id ] []
+                        , body = Http.jsonBody value
+                        , expect = Http.expectJson (ChangesSaved record.id) saveTransactionDecoder
+                        , timeout = Nothing
+                        , tracker = Nothing
+                        }
+                Err msg ->
+                    -- TODO: put message in model status
+                    Cmd.none
 
 
 -- VIEW
@@ -619,14 +614,17 @@ transactionRows transactions =
 
 transactionRow : Transaction -> Html Msg
 transactionRow transaction =
+    let
+        record =
+            toRecord transaction
+    in
     tr []
-        [ td [] [ text transaction.date ]
+        [ td [] [ text record.date ]
         , td [] [ transactionDescription transaction ]
-        , td [] [ text (toCurrency transaction.amountCents) ]
+        , td [] [ text (toCurrency record.amountCents) ]
         , td [] [ transactionStatus transaction ]
         , td [] [ postingsTable transaction ]
         ]
-
 
 clickable : Transaction -> String -> List (Attribute Msg)
 clickable transaction domId =
@@ -638,43 +636,39 @@ clicker transaction =
     let
         -- decoder that extracts the event.target.id property from the onClick event
         decoder =
-            Decode.map (Click transaction.id) (Decode.at [ "target", "id" ] Decode.string)
+            Decode.map (Click (transaction |> toRecord |> .id)) (Decode.at [ "target", "id" ] Decode.string)
     in
     on "click" decoder
 
 
 transactionDescription : Transaction -> Html Msg
 transactionDescription transaction =
-    if transaction.editable then
-        input
-            [ type_ "text"
-            , value transaction.data.description
-            , onInput (SetDescription transaction.id)
-            , editorKeyHandler (Dict.fromList [ ( 27, CancelEditor transaction.id ), ( 13, SaveChanges transaction.id ) ])
-            , id (descInputId transaction.id)
-            ]
-            []
+    case transaction of
+        EditableSavedTransaction record _ ->
+            input
+                [ type_ "text"
+                , value record.data.description
+                , onInput (SetDescription record.id)
+                , editorKeyHandler (Dict.fromList [ ( 27, CancelEditor record.id ), ( 13, SaveChanges transaction ) ])
+                , id (descInputId record.id)
+                ]
+                []
 
-    else
-        span (clickable transaction (descInputId transaction.id)) [ text transaction.data.description ]
+        SavedTransaction record ->
+            span (clickable transaction (descInputId record.id)) [ text record.data.description ]
 
 
 transactionStatus : Transaction -> Html Msg
 transactionStatus transaction =
     let
         extractAmount posting =
-            case posting of
-                SavedPosting id data ->
-                    data.amountCents
+            Maybe.withDefault 0 (fromCurrency posting.amount)
 
-                EditablePosting _ value ->
-                    Maybe.withDefault 0 (fromCurrency value)
-
-                EditableSavedPosting _ _ value ->
-                    Maybe.withDefault 0 (fromCurrency value)
+        record =
+            toRecord transaction
 
         balance =
-            transaction.amountCents + List.foldl (+) 0 (List.map extractAmount transaction.data.postings)
+            record.amountCents + List.foldl (+) 0 (List.map extractAmount record.data.postings)
     in
     case balance of
         0 ->
@@ -693,24 +687,44 @@ postingsTable transaction =
 processedPostings : Transaction -> List Posting
 processedPostings transaction =
     let
-        numPostings =
-            List.length transaction.data.postings
-    in
-    if transaction.editable || numPostings == 1 then
-        transaction.data.postings
+        postings =
+            transaction |> toRecord |> .data |> .postings
 
-    else
-        List.take (numPostings - 1) transaction.data.postings
+        numPostings =
+            List.length postings
+
+        dropAmount =
+            case transaction of
+                SavedTransaction _ ->
+                    if numPostings == 1 then
+                        0
+
+                    else
+                        1
+
+                EditableSavedTransaction _ _ ->
+                    0
+
+    in
+    List.take (numPostings - dropAmount) postings
 
 
 postingRow : Transaction -> Int -> Posting -> Html Msg
 postingRow transaction postingIndex posting =
     let
+        editable =
+            case transaction of
+                SavedTransaction _ -> False
+                EditableSavedTransaction _ _ -> True
+
         displayText =
-            postingText transaction.editable posting
+            postingText editable posting
+
+        txnId =
+            transaction |> toRecord |> .id
 
         domId idPrefix =
-            inputId (inputId idPrefix transaction.id) postingIndex
+            inputId (inputId idPrefix txnId) postingIndex
 
         cells =
             [ td [] [ postingCategoryEditor transaction postingIndex domId displayText ]
@@ -718,11 +732,12 @@ postingRow transaction postingIndex posting =
             ]
 
         controls =
-            if transaction.editable && not (emptyPosting posting) then
-                [ td [] [ a [ onClick (RemovePosting transaction.id postingIndex) ] [ text "X" ] ] ]
+            if editable && not (emptyPosting posting) then
+                [ td [] [ a [ onClick (RemovePosting txnId postingIndex) ] [ text "X" ] ] ]
 
             else
                 [ td [] [] ]
+
     in
     tr []
         (cells
@@ -734,18 +749,32 @@ emptyPosting : Posting -> Bool
 emptyPosting posting =
     case posting.category of
         NoCategory ->
-            case posting.amount of
-                CurrencyDisplay val ->
-                    String.isEmpty val
-
-                CurrencyValue amount ->
-                    abs amount == 0
+            String.isEmpty posting.amount
 
         CategorySetting value ->
             False
 
 
-postingText : Bool -> Posting -> String
+editableTransaction : Transaction -> Bool
+editableTransaction transaction =
+    case transaction of
+        SavedTransaction _ ->
+            False
+
+        EditableSavedTransaction _ _ ->
+            True
+
+
+toRecord : Transaction -> TransactionRecord
+toRecord transaction =
+    case transaction of
+        SavedTransaction record ->
+            record
+
+        EditableSavedTransaction record _ ->
+            record
+
+
 postingText editable posting =
     case posting.category of
         CategorySetting value ->
@@ -773,7 +802,7 @@ postingCategoryEditor : Transaction -> Int -> (String -> String) -> String -> Ht
 postingCategoryEditor transaction postingIndex domId displayText =
     let
         saveMsg str =
-            SetPostingName transaction.id postingIndex (toCategorySetting str)
+            SetPostingName (transaction |> toRecord |> .id) postingIndex (toCategorySetting str)
     in
     postingEditor saveMsg transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ] Dict.empty
 
@@ -781,37 +810,33 @@ postingCategoryEditor transaction postingIndex domId displayText =
 postingAmountEditor : Transaction -> Int -> (String -> String) -> Posting -> Html Msg
 postingAmountEditor transaction postingIndex domId posting =
     let
-        postingAmount =
-            case posting.amount of
-                CurrencyDisplay val ->
-                    val
-
-                CurrencyValue cents ->
-                    toCurrency cents
+        txnId =
+            transaction |> toRecord |> .id
     in
-    postingEditor (SetPostingAmount transaction.id postingIndex) transaction (domId "posting-amt-") postingAmount [] (Dict.fromList [ ( 13, SaveChanges transaction.id ) ])
+    postingEditor (SetPostingAmount txnId postingIndex) transaction (domId "posting-amt-") posting.amount [] (Dict.fromList [ ( 13, SaveChanges transaction ) ])
 
 
 postingEditor : (String -> Msg) -> Transaction -> String -> String -> List (Attribute Msg) -> Dict Int Msg -> Html Msg
 postingEditor saveMsg transaction domId displayText attributes additionalKeys =
     let
         editorKeys =
-            Dict.union (Dict.fromList [ ( 27, CancelEditor transaction.id ) ]) additionalKeys
+            Dict.union (Dict.fromList [ ( 27, CancelEditor (transaction |> toRecord |> .id) ) ]) additionalKeys
     in
-    if transaction.editable then
-        input
-            ([ type_ "text"
-             , value displayText
-             , onInput saveMsg
-             , editorKeyHandler editorKeys
-             , id domId
-             ]
-                ++ attributes
-            )
-            []
+    case transaction of
+        EditableSavedTransaction _ _ ->
+            input
+                ([ type_ "text"
+                 , value displayText
+                 , onInput saveMsg
+                 , editorKeyHandler editorKeys
+                 , id domId
+                 ]
+                    ++ attributes
+                )
+                []
 
-    else
-        span (clickable transaction domId) [ text displayText ]
+        SavedTransaction _ ->
+            span (clickable transaction domId) [ text displayText ]
 
 
 
