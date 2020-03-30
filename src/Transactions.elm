@@ -52,7 +52,6 @@ type Message
     | Error String
 
 
-
 type alias TransactionRecord =
     { id : Int
     , date : String
@@ -77,6 +76,7 @@ type alias Posting =
 type Transaction
     = SavedTransaction TransactionRecord
     | EditableSavedTransaction TransactionRecord TransactionData
+
 
 
 -- used to pass data in from JS - couldn't figure out if it's possible to omit this
@@ -158,13 +158,14 @@ update message model =
 
         SaveChanges txn ->
             let
-                errors = []
-                    -- case transaction of
-                    --     Just txn ->
-                    --         validateForSave txn
+                errors =
+                    []
 
-                    --     Nothing ->
-                    --         []
+                -- case transaction of
+                --     Just txn ->
+                --         validateForSave txn
+                --     Nothing ->
+                --         []
             in
             case errors of
                 f :: _ ->
@@ -199,59 +200,6 @@ toggleEditable transaction =
 
         EditableSavedTransaction record originalData ->
             SavedTransaction { record | data = originalData }
-
-
--- validateForSave : Transaction -> List Message
--- validateForSave transaction =
---     let
---         validateCurrencyAmount value =
---             case fromCurrency value of
---                 Just _ ->
---                     Nothing
-
---                 Nothing ->
---                     Just (Error ("Invalid currency amount " ++ value))
-
---         validatePosting posting =
---             case posting of
---                 SavedPosting _ _ ->
---                     Nothing
-
---                 EditablePosting _ value ->
---                     validateCurrencyAmount value
-
---                 EditableSavedPosting _ _ value ->
---                     validateCurrencyAmount value
---     in
---     List.filterMap validatePosting transaction.data.postings
-
-
-
--- convertPostingAmounts : Transaction -> Transaction
--- convertPostingAmounts transaction =
---     let
---         curData =
---             transaction.data
---         updatedData =
---             { curData | postings = List.map convertPostingAmount curData.postings }
---     in
---     { transaction | data = updatedData }
--- convertPostingAmount : Posting -> Posting
--- convertPostingAmount posting =
---     let
---         convertedAmount =
---             case posting.amount of
---                 CurrencyValue cents ->
---                     CurrencyValue cents
---                 CurrencyDisplay amount ->
---                     case fromCurrency amount of
---                         Just cents ->
---                             CurrencyValue cents
---                         Nothing ->
---                             -- TODO: error here? a third type?
---                             CurrencyDisplay amount
---     in
---     { posting | amount = convertedAmount }
 
 
 restoreOriginalData : Transaction -> Transaction
@@ -303,7 +251,7 @@ updateTransactionData transaction updateFn =
                 curData =
                     record.data
             in
-            EditableSavedTransaction { record | data = (updateFn curData) } originalData
+            EditableSavedTransaction { record | data = updateFn curData } originalData
 
 
 updateTransaction : List Transaction -> Int -> (Transaction -> Transaction) -> List Transaction
@@ -395,23 +343,6 @@ insertCategory transactionCategories existingCategories =
 
 
 -- Encoders & Decoders
--- type alias TransactionData =
---     { id : Int
---     , date : String
---     , description : Description
---     , amountCents : Int
---     }
--- type alias PostingData =
---     { category : CategorySetting
---     , amountCents : Int
---     }
--- type Transaction
---     = SavedTransaction (List Posting) TransactionData
---     | EditableSavedTransaction (List Posting) TransactionData Description
--- type Posting
---     = SavedPosting PostingId PostingData
---     | EditablePosting PostingData Currency
---     | EditableSavedPosting PostingId PostingData Currency
 
 
 encodeTransaction : Transaction -> Result String Encode.Value
@@ -425,11 +356,14 @@ encodeTransaction transaction =
     in
     case dataResult of
         Ok value ->
-            Ok ([ ( "id", Encode.int record.id )
-               , ( "date", Encode.string record.date )
-               , ( "amountCents", Encode.int record.amountCents )
-               , ( "data", value )
-               ] |> Encode.object)
+            Ok
+                ([ ( "id", Encode.int record.id )
+                 , ( "date", Encode.string record.date )
+                 , ( "amountCents", Encode.int record.amountCents )
+                 , ( "data", value )
+                 ]
+                    |> Encode.object
+                )
 
         Err msg ->
             dataResult
@@ -443,26 +377,34 @@ encodeTransactionData data =
 
         onlyErrors v =
             case v of
-                Ok _ -> Nothing
-                Err msg -> Just msg
+                Ok _ ->
+                    Nothing
+
+                Err msg ->
+                    Just msg
 
         onlySuccesses v =
             case v of
-                Ok value -> Just value
-                Err _ -> Nothing
+                Ok value ->
+                    Just value
+
+                Err _ ->
+                    Nothing
 
         errorResults =
             List.filterMap onlyErrors postingResults
 
         successResults =
             List.filterMap onlySuccesses postingResults
-
     in
-    if (List.length errorResults) == 0 then
-        Ok (Encode.object
-            [ ( "description", Encode.string data.description )
-            , ( "postings", Encode.list (\a -> a) successResults )
-            ])
+    if List.length errorResults == 0 then
+        Ok
+            (Encode.object
+                [ ( "description", Encode.string data.description )
+                , ( "postings", Encode.list (\a -> a) successResults )
+                ]
+            )
+
     else
         Err (List.foldr (++) "" errorResults)
 
@@ -470,7 +412,8 @@ encodeTransactionData data =
 encodePosting : Posting -> Result String Encode.Value
 encodePosting posting =
     let
-        amountCents = fromCurrency posting.amount
+        amountCents =
+            fromCurrency posting.amount
 
         category =
             case posting.category of
@@ -482,12 +425,14 @@ encodePosting posting =
     in
     case amountCents of
         Just cents ->
-            Ok ([ maybeEncodeField "id" Encode.int posting.id
-                , Just ( "category", Encode.string category )
-                , Just ( "amountCents", Encode.int cents )
-                ]
+            Ok
+                ([ maybeEncodeField "id" Encode.int posting.id
+                 , Just ( "category", Encode.string category )
+                 , Just ( "amountCents", Encode.int cents )
+                 ]
                     |> List.filterMap (\v -> v)
-                    |> Encode.object)
+                    |> Encode.object
+                )
 
         Nothing ->
             Err ("Cannot convert " ++ posting.amount ++ " into cents")
@@ -572,9 +517,11 @@ saveChanges transaction =
                         , timeout = Nothing
                         , tracker = Nothing
                         }
+
                 Err msg ->
                     -- TODO: put message in model status
                     Cmd.none
+
 
 
 -- VIEW
@@ -625,6 +572,7 @@ transactionRow transaction =
         , td [] [ transactionStatus transaction ]
         , td [] [ postingsTable transaction ]
         ]
+
 
 clickable : Transaction -> String -> List (Attribute Msg)
 clickable transaction domId =
@@ -704,7 +652,6 @@ processedPostings transaction =
 
                 EditableSavedTransaction _ _ ->
                     0
-
     in
     List.take (numPostings - dropAmount) postings
 
@@ -714,8 +661,11 @@ postingRow transaction postingIndex posting =
     let
         editable =
             case transaction of
-                SavedTransaction _ -> False
-                EditableSavedTransaction _ _ -> True
+                SavedTransaction _ ->
+                    False
+
+                EditableSavedTransaction _ _ ->
+                    True
 
         displayText =
             postingText editable posting
@@ -737,7 +687,6 @@ postingRow transaction postingIndex posting =
 
             else
                 [ td [] [] ]
-
     in
     tr []
         (cells
@@ -872,10 +821,6 @@ toDollarsCents cents =
             cents // 100
     in
     ( dollars, abs (cents - (dollars * 100)) )
-
-
-
--- TODO: this doesn't allow negatives, also causes some weird input behavior
 
 
 toCents : String -> Int
