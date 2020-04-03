@@ -196,7 +196,14 @@ toggleEditable : Transaction -> Transaction
 toggleEditable transaction =
     case transaction of
         SavedTransaction record ->
-            EditableSavedTransaction record record.data
+            let
+                curData =
+                    record.data
+
+                newData =
+                    { curData | postings = ensureEmptyPosting curData.postings }
+            in
+            EditableSavedTransaction { record | data = newData } record.data
 
         EditableSavedTransaction record originalData ->
             SavedTransaction { record | data = originalData }
@@ -287,7 +294,8 @@ ensureEmptyPosting postings =
 
     else
         -- TODO: defaualt amount to remaining balance
-        postings ++ [ Posting Nothing NoCategory "0" ]
+        -- TODO: maybe empty posting should be a different type of posting?
+        postings ++ [ Posting Nothing NoCategory "" ]
 
 
 updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
@@ -609,21 +617,20 @@ transactionDescription transaction =
 transactionStatus : Transaction -> Html Msg
 transactionStatus transaction =
     let
-        extractAmount posting =
-            Maybe.withDefault 0 (fromCurrency posting.amount)
-
         record =
             toRecord transaction
 
-        balance =
-            record.amountCents + List.foldl (+) 0 (List.map extractAmount record.data.postings)
-    in
-    case balance of
-        0 ->
-            text "Balanced"
+        extractedAmounts =
+            List.filterMap (\posting -> fromCurrency posting.amount) record.data.postings
 
-        _ ->
-            text "Unbalanced"
+        balance =
+            record.amountCents + List.foldl (+) 0 extractedAmounts
+    in
+    if balance == 0 && List.length extractedAmounts == List.length (List.filter postingWithAmount record.data.postings) then
+        text "Balanced"
+
+    else
+        text "Unbalanced"
 
 
 postingsTable : Transaction -> Html Msg
@@ -702,6 +709,11 @@ emptyPosting posting =
 
         CategorySetting value ->
             False
+
+
+postingWithAmount : Posting -> Bool
+postingWithAmount posting =
+    String.length posting.amount > 0
 
 
 editableTransaction : Transaction -> Bool
