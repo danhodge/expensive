@@ -348,29 +348,30 @@ encodeTransaction transaction =
         record =
             toRecord transaction
 
-        dataResult =
-            encodeTransactionData record.data
+        postingsResult =
+            encodePostings record.data.postings
     in
-    case dataResult of
+    case postingsResult of
         Ok value ->
             Ok
                 ([ ( "id", Encode.int record.id )
                  , ( "date", Encode.string record.date )
                  , ( "amountCents", Encode.int record.amountCents )
-                 , ( "data", value )
+                 , ( "description", Encode.string record.data.description )
+                 , ( "postings", value )
                  ]
                     |> Encode.object
                 )
 
         Err msg ->
-            dataResult
+            postingsResult
 
 
-encodeTransactionData : TransactionData -> Result String Encode.Value
-encodeTransactionData data =
+encodePostings : List Posting -> Result String Encode.Value
+encodePostings postings =
     let
         postingResults =
-            List.map encodePosting (List.filter (emptyPosting >> not) data.postings)
+            List.map encodePosting (List.filter (emptyPosting >> not) postings)
 
         onlyErrors v =
             case v of
@@ -395,12 +396,7 @@ encodeTransactionData data =
             List.filterMap onlySuccesses postingResults
     in
     if List.length errorResults == 0 then
-        Ok
-            (Encode.object
-                [ ( "description", Encode.string data.description )
-                , ( "postings", Encode.list (\a -> a) successResults )
-                ]
-            )
+        Ok (Encode.list (\a -> a) successResults)
 
     else
         Err (List.foldr (++) "" errorResults)
@@ -640,31 +636,7 @@ transactionStatus transaction =
 postingsTable : Transaction -> Html Msg
 postingsTable transaction =
     table []
-        (List.indexedMap (postingRow transaction) (processedPostings transaction))
-
-
-processedPostings : Transaction -> List Posting
-processedPostings transaction =
-    let
-        postings =
-            transaction |> toRecord |> .data |> .postings
-
-        numPostings =
-            List.length postings
-
-        dropAmount =
-            case transaction of
-                SavedTransaction _ ->
-                    if numPostings == 1 then
-                        0
-
-                    else
-                        1
-
-                EditableSavedTransaction _ _ ->
-                    0
-    in
-    List.take (numPostings - dropAmount) postings
+        (List.indexedMap (postingRow transaction) (transaction |> toRecord |> .data |> .postings))
 
 
 postingRow : Transaction -> Int -> Posting -> Html Msg
@@ -802,13 +774,6 @@ postingEditor saveMsg transaction domId displayText attributes additionalKeys =
 
         SavedTransaction _ ->
             span (clickable transaction domId) [ text displayText ]
-
-
-
--- TODO: how to capture the input as a string but still validate it?
--- on load - convert cents into currency string
--- on update - update the string - convert it back into cents for balance computation but do not fail on error
--- on save - validate the string and refuse to save if not valid
 
 
 toCurrency : Int -> String
