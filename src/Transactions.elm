@@ -157,23 +157,12 @@ update message model =
             ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (\posting -> Nothing) }, Cmd.none )
 
         SaveChanges txn ->
-            let
-                errors =
-                    []
+            case saveChanges txn of
+                Ok cmd ->
+                    ( { model | status = NoMessage }, cmd )
 
-                -- case transaction of
-                --     Just txn ->
-                --         validateForSave txn
-                --     Nothing ->
-                --         []
-            in
-            case errors of
-                f :: _ ->
-                    -- TODO: include error message in the model
-                    ( model, Cmd.none )
-
-                [] ->
-                    ( model, saveChanges txn )
+                Err msg ->
+                    ( { model | status = Error msg }, Cmd.none )
 
         ChangesSaved id (Ok updatedTxn) ->
             let
@@ -503,11 +492,11 @@ getTransactions =
         }
 
 
-saveChanges : Transaction -> Cmd Msg
+saveChanges : Transaction -> Result String (Cmd Msg)
 saveChanges transaction =
     case transaction of
         SavedTransaction _ ->
-            Cmd.none
+            Ok Cmd.none
 
         EditableSavedTransaction record _ ->
             let
@@ -516,19 +505,20 @@ saveChanges transaction =
             in
             case encodeResult of
                 Ok value ->
-                    Http.request
-                        { method = "PUT"
-                        , headers = []
-                        , url = Url.Builder.crossOrigin "http://localhost:4567" [ "transactions", String.fromInt record.id ] []
-                        , body = Http.jsonBody value
-                        , expect = Http.expectJson (ChangesSaved record.id) saveTransactionDecoder
-                        , timeout = Nothing
-                        , tracker = Nothing
-                        }
+                    Ok
+                        (Http.request
+                            { method = "PUT"
+                            , headers = []
+                            , url = Url.Builder.crossOrigin "http://localhost:4567" [ "transactions", String.fromInt record.id ] []
+                            , body = Http.jsonBody value
+                            , expect = Http.expectJson (ChangesSaved record.id) saveTransactionDecoder
+                            , timeout = Nothing
+                            , tracker = Nothing
+                            }
+                        )
 
                 Err msg ->
-                    -- TODO: put message in model status
-                    Cmd.none
+                    Err msg
 
 
 
@@ -543,6 +533,7 @@ view model =
                 (\name -> option [] [ text name ])
                 model.categories
             )
+        , statusMessage model.status
         , table
             []
             -- there has to be a better way to do this
@@ -550,6 +541,19 @@ view model =
                 ++ transactionRows model.transactions
             )
         ]
+
+
+statusMessage : Message -> Html Msg
+statusMessage msg =
+    case msg of
+        NoMessage ->
+            span [] []
+
+        Message txt ->
+            span [] [ text txt ]
+
+        Error txt ->
+            span [ class "error" ] [ text txt ]
 
 
 tableRow : (List (Attribute Msg) -> List (Html Msg) -> Html Msg) -> List String -> Html Msg

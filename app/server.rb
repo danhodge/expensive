@@ -67,12 +67,12 @@ put "/transactions/:id" do
   id = Integer(params[:id])
   if transactions.key?(id)
     new_txn = JSON.parse(request.body.read, symbolize_names: true)
-    new_txn[:postings].each do |posting|
+    puts "PUT /transactions/#{params[:id]} BODY: #{new_txn.inspect}"
+    new_txn[:data][:postings].each do |posting|
       posting[:id] ||= next_id
     end
-    puts "BODY: #{new_txn.inspect}"
-    transactions[id][:description] = new_txn[:description]
-    transactions[id][:postings] = new_txn[:postings]
+    transactions[id][:description] = new_txn[:data][:description]
+    transactions[id][:postings] = new_txn[:data][:postings]
 
     { status: "OK", transaction: { id: id }.merge(transactions[id]) }.to_json.tap { |b| puts "RESP = #{b}" }
   else
