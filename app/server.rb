@@ -15,7 +15,7 @@ helpers do
   def transactions
     @transactions ||= {
       next_id => {
-        date: "2019-03-01",
+        date: "Mar 1, 2019",
         amountCents: -1000,
         description: "Food",
         postings: [
@@ -27,13 +27,13 @@ helpers do
         ]
       },
       next_id => {
-        date: "2019-03-02",
+        date: "Mar 2, 2019",
         amountCents: -3461,
         description: "Gas",
         postings: []
       },
       next_id => {
-        date: "2019-03-06",
+        date: "Mar 6, 2019",
         amountCents: -1499,
         description: "Pets",
         postings: [

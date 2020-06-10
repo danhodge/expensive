@@ -1,4 +1,4 @@
-module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialModel, main, tableRow, update, view)
+module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialModel, main, update, view)
 
 import Browser
 import Browser.Dom
@@ -12,6 +12,7 @@ import Json.Encode as Encode exposing (..)
 import String
 import Task
 import Url.Builder
+import Zondicon exposing (Zondicon, zondicon)
 
 
 
@@ -76,6 +77,11 @@ type alias Posting =
 type Transaction
     = SavedTransaction TransactionRecord
     | EditableSavedTransaction TransactionRecord TransactionData
+
+
+type MoneySign
+    = Positive
+    | Negative
 
 
 
@@ -523,20 +529,35 @@ saveChanges transaction =
 
 view : Model -> Html Msg
 view model =
-    div []
+    div [ class "mt-4" ]
         [ datalist [ id "categories-list" ]
             (List.map
                 (\name -> option [] [ text name ])
                 model.categories
             )
-        , statusMessage model.status
+        , div
+            (classes
+                [ "w-2/3", "mx-auto" ]
+            )
+            [ statusMessage model.status ]
         , table
-            []
-            -- there has to be a better way to do this
-            ([ tableRow th [ "Date", "Description", "Amount", "Status", "Postings" ] ]
+            (classes [ "w-2/3", "mx-auto", "table-fixed" ])
+            ([ tr [ class "text-left" ]
+                [ th [ class "w-1/6", class "p-2" ] [ text "Date" ]
+                , th [ class "w-1/4" ] [ text "Description" ]
+                , th [ class "w-1/6" ] [ text "Amount" ]
+                , th [ class "w-1/6" ] [ text "Status" ]
+                , th [ class "w-1/2" ] [ text "Postings" ]
+                ]
+             ]
                 ++ transactionRows model.transactions
             )
         ]
+
+
+classes : List String -> List (Attribute Msg)
+classes names =
+    List.map (\name -> class name) names
 
 
 statusMessage : Message -> Html Msg
@@ -549,17 +570,7 @@ statusMessage msg =
             span [] [ text txt ]
 
         Error txt ->
-            span [ class "error" ] [ text txt ]
-
-
-tableRow : (List (Attribute Msg) -> List (Html Msg) -> Html Msg) -> List String -> Html Msg
-tableRow elementType values =
-    tableRowWithAttributes [] elementType values
-
-
-tableRowWithAttributes : List (Attribute Msg) -> (List (Attribute Msg) -> List (Html Msg) -> Html Msg) -> List String -> Html Msg
-tableRowWithAttributes attributes elementType values =
-    tr attributes (List.map (\value -> elementType [] [ text value ]) values)
+            span [ class "text-red-600", class "pl-2", class "font-semibold" ] [ text txt ]
 
 
 transactionRows : List Transaction -> List (Html Msg)
@@ -572,14 +583,53 @@ transactionRow transaction =
     let
         record =
             toRecord transaction
+
+        cssClasses =
+            [ "text-sm", "text-gray-800", "border-b-2", "border-solid", "border-gray-400" ]
+                ++ (case transaction of
+                        SavedTransaction _ ->
+                            []
+
+                        EditableSavedTransaction _ _ ->
+                            [ "bg-yellow-300" ]
+                   )
+
+        rowAttrs =
+            classes cssClasses
+                ++ (case transaction of
+                        SavedTransaction _ ->
+                            clickable transaction (descInputId record.id)
+
+                        EditableSavedTransaction _ _ ->
+                            []
+                   )
     in
-    tr []
-        [ td [] [ text record.date ]
-        , td [] [ transactionDescription transaction ]
-        , td [] [ text (toCurrency record.amountCents) ]
-        , td [] [ transactionStatus transaction ]
-        , td [] [ postingsTable transaction ]
+    tr rowAttrs
+        [ td (classes [ "align-top", "h-8", "py-1", "pl-2" ]) [ text record.date ]
+        , td (classes [ "align-top", "h-8", "py-1" ]) [ transactionDescription transaction ]
+        , td (classes [ "align-top", "h-8", "py-1" ])
+            [ div
+                (amountClasses
+                    [ class "mr-12" ]
+                    record.amountCents
+                )
+                [ text (toCurrencyDisplay record.amountCents) ]
+            ]
+        , td (classes [ "align-top", "h-8", "py-1" ]) [ transactionStatus transaction ]
+        , td (classes [ "align-top", "h-8", "py-1" ]) [ postingsTable transaction ]
         ]
+
+
+amountClasses : List (Attribute Msg) -> Int -> List (Attribute Msg)
+amountClasses attrs amountCents =
+    (if amountCents < 0 then
+        []
+
+     else
+        [ class "text-green-600 " ]
+    )
+        ++ [ class "text-right " ]
+        ++ attrs
 
 
 clickable : Transaction -> String -> List (Attribute Msg)
@@ -603,6 +653,11 @@ transactionDescription transaction =
         EditableSavedTransaction record _ ->
             input
                 [ type_ "text"
+                , class "border"
+                , class "px-1"
+                , class "rounded-sm"
+                , class "border-gray-400"
+                , Html.Attributes.autocomplete False
                 , value record.data.description
                 , onInput (SetDescription record.id)
                 , editorKeyHandler (Dict.fromList [ ( 27, CancelEditor record.id ), ( 13, SaveChanges transaction ) ])
@@ -611,7 +666,7 @@ transactionDescription transaction =
                 []
 
         SavedTransaction record ->
-            span (clickable transaction (descInputId record.id)) [ text record.data.description ]
+            span [] [ text record.data.description ]
 
 
 transactionStatus : Transaction -> Html Msg
@@ -635,7 +690,7 @@ transactionStatus transaction =
 
 postingsTable : Transaction -> Html Msg
 postingsTable transaction =
-    table []
+    table [ class "table-fixed", class "w-full" ]
         (List.indexedMap (postingRow transaction) (transaction |> toRecord |> .data |> .postings))
 
 
@@ -660,16 +715,23 @@ postingRow transaction postingIndex posting =
             inputId (inputId idPrefix txnId) postingIndex
 
         cells =
-            [ td [] [ postingCategoryEditor transaction postingIndex domId displayText ]
-            , td [] [ postingAmountEditor transaction postingIndex domId posting ]
+            [ td [ class "w-9/12" ] [ postingCategoryEditor transaction postingIndex domId displayText ]
+            , td [ class "w-1/6", class "text-right" ] [ postingAmountEditor transaction postingIndex domId posting ]
             ]
 
         controls =
             if editable && not (emptyPosting posting) then
-                [ td [] [ a [ onClick (RemovePosting txnId postingIndex) ] [ text "X" ] ] ]
+                [ td [ class "w-1/12", class "text-center" ]
+                    [ div
+                        [ onClick (RemovePosting txnId postingIndex)
+                        ]
+                        -- TODO: figure out how to get other styles to apply to the icon (i.e. color)
+                        [ zondicon [ "h-4" ] Zondicon.CloseIcon ]
+                    ]
+                ]
 
             else
-                [ td [] [] ]
+                [ td [ class "w-1/12" ] [] ]
     in
     tr []
         (cells
@@ -741,7 +803,7 @@ postingCategoryEditor transaction postingIndex domId displayText =
         saveMsg str =
             SetPostingName (transaction |> toRecord |> .id) postingIndex (toCategorySetting str)
     in
-    postingEditor saveMsg transaction (domId "posting-desc-") displayText [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ] Dict.empty
+    postingEditor saveMsg transaction (domId "posting-desc-") (\_ -> displayText) (\_ -> [ Html.Attributes.list "categories-list", Html.Attributes.autocomplete False ]) Dict.empty
 
 
 postingAmountEditor : Transaction -> Int -> (String -> String) -> Posting -> Html Msg
@@ -750,44 +812,110 @@ postingAmountEditor transaction postingIndex domId posting =
         txnId =
             transaction |> toRecord |> .id
     in
-    postingEditor (SetPostingAmount txnId postingIndex) transaction (domId "posting-amt-") posting.amount [] (Dict.fromList [ ( 13, SaveChanges transaction ) ])
+    postingEditor (SetPostingAmount txnId postingIndex) transaction (domId "posting-amt-") (postingAmountDisplayText posting.amount) (postingAmountAttributes posting.amount) (Dict.fromList [ ( 13, SaveChanges transaction ) ])
 
 
-postingEditor : (String -> Msg) -> Transaction -> String -> String -> List (Attribute Msg) -> Dict Int Msg -> Html Msg
-postingEditor saveMsg transaction domId displayText attributes additionalKeys =
+postingEditor : (String -> Msg) -> Transaction -> String -> (Transaction -> String) -> (Transaction -> List (Attribute Msg)) -> Dict Int Msg -> Html Msg
+postingEditor saveMsg transaction domId displayTextFn attributesFn additionalKeys =
     let
         editorKeys =
             Dict.union (Dict.fromList [ ( 27, CancelEditor (transaction |> toRecord |> .id) ) ]) additionalKeys
     in
     case transaction of
         EditableSavedTransaction _ _ ->
-            input
-                ([ type_ "text"
-                 , value displayText
-                 , onInput saveMsg
-                 , editorKeyHandler editorKeys
-                 , id domId
-                 ]
-                    ++ attributes
-                )
-                []
+            div (classes [ "flex", "flex-col" ])
+                [ input
+                    ([ type_ "text"
+                     , class "border"
+                     , class "px-1"
+                     , class "rounded-sm"
+                     , class "border-gray-400"
+                     , value (displayTextFn transaction)
+                     , onInput saveMsg
+                     , editorKeyHandler editorKeys
+                     , id domId
+                     ]
+                        ++ attributesFn transaction
+                    )
+                    []
+                ]
 
         SavedTransaction _ ->
-            span (clickable transaction domId) [ text displayText ]
+            span (attributesFn transaction) [ text (displayTextFn transaction) ]
 
 
-toCurrency : Int -> String
-toCurrency amountCents =
+postingAmountDisplayText : String -> Transaction -> String
+postingAmountDisplayText amount transaction =
+    case transaction of
+        EditableSavedTransaction _ _ ->
+            amount
+
+        SavedTransaction _ ->
+            case fromCurrency amount of
+                Just amountCents ->
+                    toCurrencyDisplay amountCents
+
+                Nothing ->
+                    amount
+
+
+postingAmountAttributes : String -> Transaction -> List (Attribute Msg)
+postingAmountAttributes amount transaction =
+    case transaction of
+        EditableSavedTransaction _ _ ->
+            [ class "text-right", Html.Attributes.autocomplete False ]
+
+        SavedTransaction _ ->
+            case fromCurrency amount of
+                Just amountCents ->
+                    amountClasses [] amountCents
+
+                Nothing ->
+                    []
+
+
+toCurrencyDisplay : Int -> String
+toCurrencyDisplay amountCents =
     let
-        ( dollars, cents ) =
+        ( sign, dollars, cents ) =
             toDollarsCents amountCents
+
+        prefix =
+            case sign of
+                Positive ->
+                    "$"
+
+                Negative ->
+                    "-$"
     in
     if amountCents == 0 then
         -- TODO: do not display an empty string for a posting that is being edited
         ""
 
     else
-        String.join "." [ String.fromInt dollars, String.fromInt cents |> String.padLeft 2 '0' ]
+        String.join "." [ String.join "" [ prefix, dollars ], cents ]
+
+
+toCurrency : Int -> String
+toCurrency amountCents =
+    let
+        ( sign, dollars, cents ) =
+            toDollarsCents amountCents
+
+        prefix =
+            case sign of
+                Positive ->
+                    ""
+
+                Negative ->
+                    "-"
+    in
+    if amountCents == 0 then
+        -- TODO: do not display an empty string for a posting that is being edited
+        ""
+
+    else
+        String.join "." [ String.join "" [ prefix, dollars ], cents ]
 
 
 fromCurrency : String -> Maybe Int
@@ -795,13 +923,20 @@ fromCurrency currency =
     currency |> String.toFloat |> Maybe.map (\value -> round (value * 100))
 
 
-toDollarsCents : Int -> ( Int, Int )
+toDollarsCents : Int -> ( MoneySign, String, String )
 toDollarsCents cents =
     let
         dollars =
-            cents // 100
+            abs cents // 100
+
+        sign =
+            if cents < 0 then
+                Negative
+
+            else
+                Positive
     in
-    ( dollars, abs (cents - (dollars * 100)) )
+    ( sign, String.fromInt dollars, String.fromInt (abs cents - (dollars * 100)) |> String.padLeft 2 '0' )
 
 
 toCents : String -> Int
