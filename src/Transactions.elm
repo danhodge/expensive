@@ -13,19 +13,11 @@ import String
 import Task
 import Url.Builder
 import Zondicon exposing (Zondicon, zondicon)
+import Category as Category exposing (..)
 
 
 
 -- MODEL
-
-
-type alias Category =
-    String
-
-
-type CategorySetting
-    = CategorySetting Category
-    | NoCategory
 
 
 type alias Description =
@@ -173,12 +165,8 @@ update message model =
         ChangesSaved id (Ok updatedTxn) ->
             let
                 nonEmptyCategory posting =
-                    case posting.category of
-                        CategorySetting category ->
-                            Just category
+                    nonEmptyCategoryFilter posting.category
 
-                        _ ->
-                            Nothing
             in
             ( { model | transactions = List.map (filteredIdentityMapper (matchTransactionId id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap nonEmptyCategory (toRecord updatedTxn).data.postings) model.categories }, Cmd.none )
 
@@ -415,12 +403,7 @@ encodePosting posting =
             fromCurrency posting.amount
 
         category =
-            case posting.category of
-                NoCategory ->
-                    ""
-
-                CategorySetting name ->
-                    name
+            fromCategorySetting posting.category
     in
     case amountCents of
         Just cents ->
@@ -741,12 +724,7 @@ postingRow transaction postingIndex posting =
 
 emptyPosting : Posting -> Bool
 emptyPosting posting =
-    case posting.category of
-        NoCategory ->
-            String.isEmpty posting.amount
-
-        CategorySetting value ->
-            False
+    emptyCategory posting.category && String.isEmpty posting.amount
 
 
 postingWithAmount : Posting -> Bool
@@ -775,26 +753,14 @@ toRecord transaction =
 
 
 postingText editable posting =
-    case posting.category of
-        CategorySetting value ->
-            value
-
-        NoCategory ->
+    let
+        noCategoryText =
             if editable then
-                ""
-
+                Just ""
             else
-                "Choose a Category"
-
-
-toCategorySetting : String -> CategorySetting
-toCategorySetting text =
-    case String.length text of
-        0 ->
-            NoCategory
-
-        _ ->
-            CategorySetting text
+                Nothing
+    in
+    categoryText noCategoryText posting.category
 
 
 postingCategoryEditor : Transaction -> Int -> (String -> String) -> String -> Html Msg
