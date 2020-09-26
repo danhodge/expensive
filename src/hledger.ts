@@ -15,6 +15,7 @@ type MultiSpace = {
 }
 type Text = {
   state: "text";
+  value: string;
 }
 
 export type Token =
@@ -41,8 +42,9 @@ export function* tokenize(stream: Readable): Generator<Token> {
 
     if ((curCh === "\n" || curCh === " " || curCh === ";") && curTxt.length > 0) {
       // console.log(`yielding text = ${curTxt}`);
+      let value = curTxt;
       curTxt = "";
-      yield { state: "text" };
+      yield { state: "text", value: value };
     }
 
     if (curCh === "\n") {
@@ -74,7 +76,7 @@ export function* tokenize(stream: Readable): Generator<Token> {
   } else if (!inSpace && nextCh === " ") {
     yield { state: "single_space" };
   } else {
-    yield { state: "text" };
+    yield { state: "text", value: curTxt };
   }
 }
 

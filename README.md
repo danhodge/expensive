@@ -7,3 +7,9 @@ Life Is Expensive
 ``` bash
 elm make src/Transactions.elm --output=public/js/transactions.js --debug
 ```
+
+## Tests
+
+``` bash
+npm run test
+```
