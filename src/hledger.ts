@@ -80,82 +80,143 @@ function* nextChar(stream: Readable): Generator<string> {
   }
 }
 
-type Init = {
-  state: "init";
-}
-
-type Date = {
-  state: "date";
-  date: string;
-}
-
-type PreDescription = {
-  state: "pre_description";
-  date: string;
-}
-
-type Description = {
-  state: "description";
-  date: string;
-  text: Array<String>;
-}
-
-type ParseError = {
-  state: "parse_error";
-}
-
-
 // text single_space (text | single_space)+ multi_space [comment *] newline
 // multi space (text | single_space)+ multi_space text newline
 // newline
 
+export type parserStateType = "Init" | "InComment" | "Date" | "PreDescription" | "Description" | "PostDescription" | "PrePostings" | "ParseError";
 
-type ParserState =
-  | Init
-  | Date
-  | PreDescription
-  | Description
-  | ParseError
+export class ParserContext {
+  constructor(date?: String) {
+  }
 
-// export function parse(tokenIter: Generator<Token>): Array<Transaction> {
-//   let state: ParserState = { state: "init" };
-//   let cur: IteratorResult<Token> = tokenIter.next();
-//   if (!cur.done) {
-//     state = nextState(cur.value, state);
-//   }
+  setDate(date: string) {
+  }
 
-//   return [];
-// }
+  appendToDescription(token: string): ParserContext {
+  }
 
-// function nextState(token: Token, state: ParserState): ParserState {
-//   switch (state.state) {
-//     case "init":
-//       if (token.state == "text") {
-//         return { state: "date", date: token.value }
-//       }
+  completeDescription(): ParserContext {
+  }
 
-//     case "date":
-//       if (token.state == "single_space") {
-//         // TODO: why is this casting necessary?
-//         return { state: "pre_description", date: (state as Date).date };
-//       }
+  beginComment(): ParserContext {
+  }
 
-//     case "pre_description":
-//       if (token.state == "text") {
-//         return { state: "description", date: (state as PreDescription).date, text: [] }
-//       }
+  appendToComment(token: string): ParserContext {
+  }
 
-//     case "description":
-//       if (token.state == "text") {
-//         return { state: "description", date: (state as Description).date, text: (state as Description).text + [token.value] }
-//       } else if (token.state == "single_space") {
-//         return { state: "description", date: (state as Description).date, text: (state as Description).text + [" "] }
-//       }
+  completeComment(): parserStateType {
+  }
+}
 
-//     default:
-//       return { state: "parse_error" };
-//   }
-// }
+export class ParserState extends SumType<{
+  Init: [ParserContext];
+  InComment: [ParserContext],
+  Date: [ParserContext],
+  PreDescription: [ParserContext],
+  Description: [ParserContext],
+  PostDescription: [ParserContext],
+  PrePostings: [ParserContext],
+  ParseError: [ParserContext]
+}> { };
+
+export function parse(tokenIter: Generator<Token>): Array<Transaction> {
+  let state = new ParserState("Init", new ParserContext());
+  let cur: IteratorResult<Token> = tokenIter.next();
+  while (!cur.done && !isError(state)) {
+    let nState = nextState(cur.value, state);
+    console.log(`state = ${state}, token = ${cur.value}, nextState = ${nState}`);
+    state = nState;
+    cur = tokenIter.next();
+  }
+
+  return [];
+}
+
+function isError(state: ParserState) {
+  return state.caseOf({
+    ParseError: () => true,
+    _: () => false
+  });
+}
+
+function nextState(token: Token, state: ParserState): ParserState {
+  return state.caseOf({
+    Init: (context) => {
+      return token.caseOf({
+        Newline: () => new ParserState("Init", context),
+        Text: (str) => new ParserState("Date", new ParserContext(str)),
+        Comment: () => new ParserState("InComment", new ParserContext()),
+        _: () => new ParserState("ParseError", "Expected Text")
+      });
+    },
+    InComment: (context) => {
+      return token.caseOf({
+        Newline: () => {
+          let nextStateName = context.completeComment();
+          new ParserState(nextStateName, context);
+        },
+        Comment: () => new ParserState("InComment", context.appendToComment(";")),
+        Text: (str) => new ParserState("InComment", context.appendToComment(str)),
+        SingleSpace: () => new ParserState("InComment", context.appendToComment(" ")),
+        MultiSpace: (_num) => new ParserState("InComment", context.appendToComment(" ")) // TODO: concat all of the spaces
+      });
+    },
+    Date: (context) => {
+      return token.caseOf({
+        SingleSpace: () => new ParserState("PreDescription", context),
+        _: () => new ParserState("ParseError", "Expected Single Space")
+      });
+    },
+    PreDescription: (context) => {
+      return token.caseOf({
+        Text: (str) => new ParserState("Description", context.appendToDescription(str)),
+        _: () => new ParserState("ParseError", "Expected Text")
+      });
+    },
+    Description: (context) => {
+      return token.caseOf({
+        MultiSpace: (_numSpaces) => new ParserState("PostDescription", context.completeDescription()),
+        Newline: () => new ParserState("PrePostings", context.completeDescription()),
+        Comment: () => new ParserState("InComment", context.completeDescription().beginComment()),
+        Text: (str) => new ParserState("Description", context.appendToDescription(str)),
+        SingleSpace: () => new ParserState("Description", context.appendToDescription(" "))
+      });
+    },
+    PrePostings: (dateStr, desc) => {
+
+    }
+    _: () => new ParserState("ParseError", "Not Implemented")
+  });
+
+  // switch (state.state) {
+  //   case "init":
+  //     if (token.state == "text") {
+  //       return { state: "date", date: token.value }
+  //     }
+
+  //   case "date":
+  //     if (token.state == "single_space") {
+  //       // TODO: why is this casting necessary?
+  //       return { state: "pre_description", date: (state as Date).date };
+  //     }
+
+  //   case "pre_description":
+  //     if (token.state == "text") {
+  //       return { state: "description", date: (state as PreDescription).date, text: [] }
+  //     }
+
+  //   case "description":
+  //     if (token.state == "text") {
+  //       return { state: "description", date: (state as Description).date, text: (state as Description).text + [token.value] }
+  //     } else if (token.state == "single_space") {
+  //       return { state: "description", date: (state as Description).date, text: (state as Description).text + [" "] }
+  //     }
+
+  //   default:
+  //     return { state: "parse_error" };
+  // }
+}
 
 
 

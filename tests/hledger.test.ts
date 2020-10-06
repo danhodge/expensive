@@ -1,4 +1,4 @@
-import { Token, tokenType, tokenize } from '../src/hledger'
+import { Token, tokenType, tokenize, parse } from '../src/hledger'
 import * as memoryStreams from 'memory-streams'
 
 function nextToken(tokenIter: Generator<Token>): Token {
@@ -64,6 +64,15 @@ test("tokenize", () => {
   expect(tokenIter.next().done).toBe(true);
 });
 
-// test("parse", () => {
+test("parse", () => {
+  let journal = `; journal
 
-// });
+2020-10-09 Big Faceless Corporation
+    expenses:food:spices  $12.99
+    assets:checking      $-12.99
+`;
+  let tokenIter = tokenize(new memoryStreams.ReadableStream(journal));
+  let txns = parse(tokenIter);
+
+  expect(txns.length).toEqual(1);
+});
