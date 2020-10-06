@@ -1,4 +1,4 @@
-import { Token, tokenize, parse } from '../src/hledger'
+import { Token, tokenType, tokenize } from '../src/hledger'
 import * as memoryStreams from 'memory-streams'
 
 function nextToken(tokenIter: Generator<Token>): Token {
@@ -10,34 +10,60 @@ function nextToken(tokenIter: Generator<Token>): Token {
   }
 }
 
-function matchesExpectedText(token: Token, expText: string) {
-  return (token.state == "text") && (token.value == expText);
+function matches(token: Token, fn: (typeName: tokenType, arg?: string | number) => boolean): boolean {
+  return token.caseOf({
+    Newline: () => fn("Newline"),
+    Comment: () => fn("Comment"),
+    SingleSpace: () => fn("SingleSpace"),
+    MultiSpace: (num: number) => fn("MultiSpace", num),
+    Text: (str: string) => fn("Text", str)
+  });
+}
+
+function isA(thing: tokenType): (typeName: string) => boolean {
+  return (typeName: string) => {
+    let result = typeName === thing;
+
+    return result;
+  }
+}
+
+function isText(value: string): (typeName: tokenType, text: string) => boolean {
+  return (typeName: tokenType, text: string) => typeName === "Text" && text === value;
+}
+
+function isSpaces(value: number): (typeName: tokenType, count: number) => boolean {
+  return (typeName: tokenType, count: number) => typeName === "MultiSpace" && count === value;
 }
 
 test("tokenize", () => {
   let tokenIter = tokenize(new memoryStreams.ReadableStream("\n\n; 1  2    ABC\n ; 4 5  6 ;\n"));
 
-  expect(nextToken(tokenIter).state).toBe("newline");
-  expect(nextToken(tokenIter).state).toBe("newline");
-  expect(nextToken(tokenIter).state).toBe("comment");
-  expect(nextToken(tokenIter).state).toBe("single_space");
-  expect(matchesExpectedText(nextToken(tokenIter), "1")).toBeTruthy;
-  expect(nextToken(tokenIter).state).toBe("multi_space");
-  expect(matchesExpectedText(nextToken(tokenIter), "2")).toBeTruthy;
-  expect(nextToken(tokenIter).state).toBe("multi_space");
-  expect(matchesExpectedText(nextToken(tokenIter), "ABC")).toBeTruthy;
-  expect(nextToken(tokenIter).state).toBe("newline");
-  expect(nextToken(tokenIter).state).toBe("single_space");
-  expect(nextToken(tokenIter).state).toBe("comment");
-  expect(nextToken(tokenIter).state).toBe("single_space");
-  expect(matchesExpectedText(nextToken(tokenIter), "4")).toBeTruthy;
-  expect(nextToken(tokenIter).state).toBe("single_space");
-  expect(matchesExpectedText(nextToken(tokenIter), "5")).toBeTruthy;
-  expect(nextToken(tokenIter).state).toBe("multi_space");
-  expect(matchesExpectedText(nextToken(tokenIter), "6")).toBeTruthy;
-  expect(nextToken(tokenIter).state).toBe("single_space");
-  expect(nextToken(tokenIter).state).toBe("comment");
-  expect(nextToken(tokenIter).state).toBe("newline");
+  expect(matches(nextToken(tokenIter), isA("Newline"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("Newline"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("Comment"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("SingleSpace"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isText("1"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isSpaces(2))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isText("2"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isSpaces(4))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isText("ABC"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("Newline"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("SingleSpace"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("Comment"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("SingleSpace"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isText("4"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("SingleSpace"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isText("5"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isSpaces(2))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isText("6"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("SingleSpace"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("Comment"))).toEqual(true);
+  expect(matches(nextToken(tokenIter), isA("Newline"))).toEqual(true);
 
   expect(tokenIter.next().done).toBe(true);
 });
+
+// test("parse", () => {
+
+// });

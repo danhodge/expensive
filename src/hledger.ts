@@ -1,35 +1,23 @@
 import { Readable } from "stream";
+import { SumType } from "sums-up";
 import { Transaction } from "./transaction";
 
-type Newline = {
-  state: "newline";
-}
-type Comment = {
-  state: "comment";
-}
-type SingleSpace = {
-  state: "single_space";
-}
-type MultiSpace = {
-  state: "multi_space";
-}
-type Text = {
-  state: "text";
-  value: string;
-}
+export type tokenType = "Newline" | "Comment" | "SingleSpace" | "MultiSpace" | "Text";
 
-export type Token =
-  | Newline
-  | Comment
-  | SingleSpace
-  | MultiSpace
-  | Text
+export class Token extends SumType<{
+  Newline: [];
+  Comment: [],
+  SingleSpace: [],
+  MultiSpace: [number],
+  Text: [string]
+}> { };
 
 export function* tokenize(stream: Readable): Generator<Token> {
   let streamIter = nextChar(stream);
   let curCh = null;
   let nextCh = null;
   let inSpace = false;
+  let spacesCt = 0;
   let curTxt = "";
 
   let cur = streamIter.next();
@@ -38,26 +26,29 @@ export function* tokenize(stream: Readable): Generator<Token> {
       curCh = nextCh;
     }
     nextCh = cur.value;
-    // console.log(`curCh = [${curCh}], nextCh = [${nextCh}]`)
+    // console.log(`curCh = [${curCh}], nextCh = [${nextCh}], spacesCt = ${spacesCt}`)
 
     if ((curCh === "\n" || curCh === " " || curCh === ";") && curTxt.length > 0) {
       // console.log(`yielding text = ${curTxt}`);
       let value = curTxt;
       curTxt = "";
-      yield { state: "text", value: value };
+      yield new Token("Text", value);
     }
 
     if (curCh === "\n") {
-      yield { state: "newline" };
+      yield new Token("Newline");
     } else if (curCh === ";") {
-      yield { state: "comment" };
+      yield new Token("Comment");
     } else if (inSpace && nextCh !== " ") {
+      let token = new Token("MultiSpace", spacesCt + 1);
       inSpace = false;
-      yield { state: "multi_space" }
+      spacesCt = 0;
+      yield token;
     } else if (curCh === " " && nextCh != " ") {
-      yield { state: "single_space" }
+      yield new Token("SingleSpace");
     } else if (curCh === " " && nextCh == " ") {
       inSpace = true;
+      spacesCt += 1;
     } else if (curCh !== null) {
       curTxt += curCh;
     }
@@ -66,17 +57,17 @@ export function* tokenize(stream: Readable): Generator<Token> {
   }
 
   if (inSpace) {
-    yield { state: "multi_space" };
+    return new Token("MultiSpace", spacesCt);
   }
 
   if (nextCh === "\n") {
-    yield { state: "newline" };
+    yield new Token("Newline");
   } else if (nextCh === ";") {
-    yield { state: "comment" };
+    yield new Token("Comment");
   } else if (!inSpace && nextCh === " ") {
-    yield { state: "single_space" };
+    yield new Token("SingleSpace");
   } else {
-    yield { state: "text", value: curTxt };
+    yield new Token("Text", curTxt);
   }
 }
 
@@ -89,9 +80,84 @@ function* nextChar(stream: Readable): Generator<string> {
   }
 }
 
-export function parse(stream: Readable): Array<Transaction> {
-  return [];
+type Init = {
+  state: "init";
 }
+
+type Date = {
+  state: "date";
+  date: string;
+}
+
+type PreDescription = {
+  state: "pre_description";
+  date: string;
+}
+
+type Description = {
+  state: "description";
+  date: string;
+  text: Array<String>;
+}
+
+type ParseError = {
+  state: "parse_error";
+}
+
+
+// text single_space (text | single_space)+ multi_space [comment *] newline
+// multi space (text | single_space)+ multi_space text newline
+// newline
+
+
+type ParserState =
+  | Init
+  | Date
+  | PreDescription
+  | Description
+  | ParseError
+
+// export function parse(tokenIter: Generator<Token>): Array<Transaction> {
+//   let state: ParserState = { state: "init" };
+//   let cur: IteratorResult<Token> = tokenIter.next();
+//   if (!cur.done) {
+//     state = nextState(cur.value, state);
+//   }
+
+//   return [];
+// }
+
+// function nextState(token: Token, state: ParserState): ParserState {
+//   switch (state.state) {
+//     case "init":
+//       if (token.state == "text") {
+//         return { state: "date", date: token.value }
+//       }
+
+//     case "date":
+//       if (token.state == "single_space") {
+//         // TODO: why is this casting necessary?
+//         return { state: "pre_description", date: (state as Date).date };
+//       }
+
+//     case "pre_description":
+//       if (token.state == "text") {
+//         return { state: "description", date: (state as PreDescription).date, text: [] }
+//       }
+
+//     case "description":
+//       if (token.state == "text") {
+//         return { state: "description", date: (state as Description).date, text: (state as Description).text + [token.value] }
+//       } else if (token.state == "single_space") {
+//         return { state: "description", date: (state as Description).date, text: (state as Description).text + [" "] }
+//       }
+
+//     default:
+//       return { state: "parse_error" };
+//   }
+// }
+
+
 
 /*
  * Readable -> (() -> Token)
