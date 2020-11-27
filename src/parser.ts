@@ -17,7 +17,17 @@ export function date() {
     .then(C.char('-').drop())
     .then(N.integer())
     .then(C.char('-').drop())
-    .then(N.integer());
+    .then(N.integer())
+    .map(tuple => {
+      let date = new Date();
+      date.setFullYear(tuple.at(0), tuple.at(1) - 1, tuple.at(2));
+      date.setUTCHours(0);
+      date.setUTCMinutes(0);
+      date.setUTCSeconds(0);
+      date.setUTCMilliseconds(0);
+
+      return date;
+    });
 }
 
 export function postingDescription() {
@@ -29,7 +39,8 @@ export function postingDescription() {
 
 export function description() {
   return C.charNotIn("\n;")
-    .then(C.charNotIn("\n;").optrep());
+    .then(C.charNotIn("\n;").optrep())
+    .map(v => v.join("").trim());
 }
 
 export function amount() {
@@ -49,17 +60,23 @@ export function posting() {
     .then(postingDescription())
     .then(nonNewlineWhitespace().drop())
     .then(amount())
-    .then(C.char("\n").drop());
+    .then(C.char("\n").drop())
+    .map(tuple => [tuple.at(0), tuple.at(1)]);
 }
 
-export function record() {
+function recordDesc() {
   return date()
     .then(nonNewlineWhitespace1().drop())
     .then(description())
-    .then(comment().opt())
+    .then(comment().opt().drop())  // TODO: need to stop dropping this
     .then(C.char("\n").drop())
-    .then(posting())
-    .then(posting().optrep())
+    .map(tuple => [tuple.at(0), tuple.at(1)]);
+}
+
+export function record() {
+  // TODO: group each record into its own array
+  return recordDesc()
+    .then(posting().rep())
     .then(F.try(blankLine()).or(F.eos()).drop());
 }
 

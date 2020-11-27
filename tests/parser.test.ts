@@ -5,7 +5,7 @@ import { parse, date, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitesp
 test("date", () => {
   let r = date().parse(Streams.ofString("2020-11-13"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value.value).toEqual([2020, 11, 13]);
+  expect(r.value).toEqual(new Date(Date.parse("2020-11-13")));
 });
 
 test("nonNewlineWhitespace", () => {
@@ -34,7 +34,7 @@ test("nonNewlineWhitespace1 no whitespace characters", () => {
 test("posting", () => {
   let r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value.value).toEqual(["expenses:food:fast food", -123]);
+  expect(r.value).toEqual(["expenses:food:fast food", -123]);
 });
 
 test("blankLine", () => {
@@ -56,6 +56,7 @@ test("commentAndNewline", () => {
 test("record", () => {
   let r = record().parse(Streams.ofString("2020-11-17 Some store\n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
   expect(r.isAccepted()).toEqual(true);
+  expect(r.value.value).toEqual([[new Date(Date.parse("2020-11-17")), "Some store"], ["expenses:food:groceries", -123], ["assets:cash", 123]]);
 })
 
 test("recordWithComment", () => {
@@ -93,7 +94,7 @@ test("posting", () => {
   let data = "    expenses:unclassified                 $900.00\n";
   let r = posting().parse(Streams.ofString(data));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value.value).toEqual(["expenses:unclassified", 90000]);
+  expect(r.value).toEqual(["expenses:unclassified", 90000]);
 })
 
 test("comment, blank & record", () => {
@@ -119,5 +120,6 @@ test("hledger", () => {
 // test("realData", () => {
 //   let data = readFileSync('test.journal').toString();
 //   let r = hledger().parse(Streams.ofString(data));
+//   console.log(r.value.value);
 //   expect(r.isAccepted()).toEqual(true);
 // });
