@@ -24,7 +24,7 @@ export function postingDescription() {
   return (
     C.charNotIn("\n; ").rep().then(C.char(" "))
   ).rep()
-    .then(C.char(" ").rep());
+    .then(C.char(" ").rep()).map(v => v.join("").trim());
 }
 
 export function description() {
@@ -33,11 +33,15 @@ export function description() {
 }
 
 export function amount() {
-  return C.char('$')
+  return C.char('$').drop()
     .then(C.char('-').opt())
     .then(N.integer())
-    .then(C.char('.'))
-    .then(N.integer());
+    .then(C.char('.').drop())
+    .then(N.integer())
+    .map(tuple => {
+      let cents = tuple.at(1) * 100 + tuple.at(2);
+      return tuple.at(0).map(() => cents * -1).orElse(cents);
+    });
 }
 
 export function posting() {

@@ -1,6 +1,6 @@
 import { Streams } from '@masala/parser';
 import { readFileSync } from 'fs';
-import { parse, date, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitespace1, posting, record, hledger, blankLine } from '../src/parser'
+import { parse, date, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitespace1, posting, record, hledger, blankLine, postingDescription, amount } from '../src/parser'
 
 test("date", () => {
   let r = date().parse(Streams.ofString("2020-11-13"));
@@ -34,7 +34,7 @@ test("nonNewlineWhitespace1 no whitespace characters", () => {
 test("posting", () => {
   let r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23\n"));
   expect(r.isAccepted()).toEqual(true);
-  // expect(r.value.value).toEqual([]);
+  expect(r.value.value).toEqual(["expenses:food:fast food", -123]);
 });
 
 test("blankLine", () => {
@@ -75,10 +75,25 @@ test("comment & blank", () => {
   expect(r.isAccepted()).toEqual(true);
 });
 
+test("postingDescription", () => {
+  let data = "expenses:food:fruits and vegetables:organic  ";
+  let r = postingDescription().parse(Streams.ofString(data));
+  expect(r.isAccepted()).toEqual(true);
+  expect(r.value).toEqual(data.trim());
+});
+
+test("amount", () => {
+  let data = "$-123.45";
+  let r = amount().parse(Streams.ofString(data));
+  expect(r.isAccepted()).toEqual(true);
+  expect(r.value).toEqual(-12345);
+});
+
 test("posting", () => {
-  let data = "    expenses:unclassified                 $-900.00\n";
+  let data = "    expenses:unclassified                 $900.00\n";
   let r = posting().parse(Streams.ofString(data));
   expect(r.isAccepted()).toEqual(true);
+  expect(r.value.value).toEqual(["expenses:unclassified", 90000]);
 })
 
 test("comment, blank & record", () => {
