@@ -19,8 +19,7 @@ export function date() {
     .then(C.char('-').drop())
     .then(N.integer())
     .map(tuple => {
-      let date = new Date();
-      date.setFullYear(tuple.at(0), tuple.at(1) - 1, tuple.at(2));
+      let date = new Date(tuple.at(0), tuple.at(1) - 1, tuple.at(2));
       date.setUTCHours(0);
       date.setUTCMinutes(0);
       date.setUTCSeconds(0);
@@ -89,13 +88,24 @@ export function commentAndNewline() {
   return comment().then(C.char("\n").drop());
 }
 
+function recordBlankLineOrCommentLine() {
+  return F.try(record())
+    .or(F.try(blankLine()).or(commentAndNewline()))
+    .map(
+      (tuple) => {
+        let postings = [];
+        let i = 1;
+        for (; i < tuple.size(); i++) {
+          postings.push(tuple.at(i));
+        }
+
+        return [tuple.at(0), postings];
+      }
+    );
+}
+
 export function hledger() {
-  return (
-    F.try(record())
-      .or(F.try(blankLine()).or(commentAndNewline()))
-  )
-    .optrep()
-    .then(F.eos());
+  return recordBlankLineOrCommentLine().optrep().then(F.eos());
 }
 
 export function parse(input: string): Response<any> {
