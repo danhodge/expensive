@@ -1,18 +1,20 @@
-import { Response, Streams, N, C, F } from '@masala/parser';
+import { Response, Streams, N, C, F, SingleParser, TupleParser, Tuple } from '@masala/parser';
+import { Posting } from './posting';
+import { Transaction } from './transaction';
 
-export function nonNewlineWhitespace() {
+export function nonNewlineWhitespace(): TupleParser<string> {
   return C.charIn(" \t").optrep();
 }
 
-export function nonNewlineWhitespace1() {
+export function nonNewlineWhitespace1(): TupleParser<string> {
   return C.charIn(" \t").then(C.charIn(" \t").optrep());
 }
 
-export function blankLine() {
+export function blankLine(): TupleParser<string> {
   return nonNewlineWhitespace().then(C.charIn("\n"));
 }
 
-export function date() {
+export function date(): SingleParser<Date> {
   return N.integer()
     .then(C.char('-').drop())
     .then(N.integer())
@@ -29,20 +31,20 @@ export function date() {
     });
 }
 
-export function postingDescription() {
+export function postingDescription(): SingleParser<string> {
   return (
     C.charNotIn("\n; ").rep().then(C.char(" "))
   ).rep()
     .then(C.char(" ").rep()).map(v => v.join("").trim());
 }
 
-export function description() {
+export function description(): SingleParser<string> {
   return C.charNotIn("\n;")
     .then(C.charNotIn("\n;").optrep())
     .map(v => v.join("").trim());
 }
 
-export function amount() {
+export function amount(): SingleParser<number> {
   return C.char('$').drop()
     .then(C.char('-').opt())
     .then(N.integer())
@@ -54,16 +56,16 @@ export function amount() {
     });
 }
 
-export function posting() {
+export function posting(): SingleParser<Posting> {
   return nonNewlineWhitespace1().drop()
     .then(postingDescription())
     .then(nonNewlineWhitespace().drop())
     .then(amount())
     .then(C.char("\n").drop())
-    .map(tuple => [tuple.at(0), tuple.at(1)]);
+    .map(tuple => new Posting(-1, tuple.at(0), tuple.at(1)));  // TODO: stop hard-coding posting id
 }
 
-function recordDesc() {
+function recordDesc(): SingleParser<[Date, string]> {
   return date()
     .then(nonNewlineWhitespace1().drop())
     .then(description())
@@ -72,42 +74,50 @@ function recordDesc() {
     .map(tuple => [tuple.at(0), tuple.at(1)]);
 }
 
-export function record() {
+export function record(): TupleParser<String> {
   // TODO: group each record into its own array
   return recordDesc()
     .then(posting().rep())
     .then(F.try(blankLine()).or(F.eos()).drop());
 }
 
-function comment() {
+function comment(): TupleParser<string> {
   return C.char(';').drop()
     .then(C.charNotIn("\n").optrep());
 }
 
-export function commentAndNewline() {
+export function commentAndNewline(): TupleParser<string> {
   return comment().then(C.char("\n").drop());
 }
 
-function recordBlankLineOrCommentLine() {
+function recordBlankLineOrCommentLine(): SingleParser<Transaction> {
   return F.try(record())
-    .or(F.try(blankLine()).or(commentAndNewline()))
+    .or(F.try(blankLine().drop()).or(commentAndNewline().drop()))
     .map(
-      (tuple) => {
-        let postings = [];
-        let i = 1;
-        for (; i < tuple.size(); i++) {
-          postings.push(tuple.at(i));
-        }
+      (tuple: Tuple<string> | symbol) => {
+        if (typeof tuple === "symbol") {
+          return null;
+        } else {
+          let postings = new Array<Posting>();
+          let i = 1;
+          for (; i < tuple.size(); i++) {
+            // the tuple tuple is being specified as Posting but I think it's being thrown away
+            let posting: unknown = tuple.at(i);
+            postings.push(posting as Posting);
+          }
 
-        return [tuple.at(0), postings];
+          // the tuple type is specified as [Date, string] but I think it's being thrown away
+          let date: unknown = tuple.at(0)[0];
+          return new Transaction(-1, (date as Date), tuple.at(0)[1], postings);
+        }
       }
     );
 }
 
-export function hledger() {
+export function hledger(): TupleParser<Transaction> {
   return recordBlankLineOrCommentLine().optrep().then(F.eos());
 }
 
-export function parse(input: string): Response<any> {
+export function parse(input: string): Response<Tuple<Transaction>> {
   return hledger().parse(Streams.ofString(input));
 }
