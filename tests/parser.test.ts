@@ -58,6 +58,7 @@ test("record", () => {
   let r = record().parse(Streams.ofString("2020-11-17 Some store\n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
   expect(r.isAccepted()).toEqual(true);
   expect(r.value).toEqual({
+    id: null,
     date: new Date(Date.parse("2020-11-17")),
     description: "Some store",
     postings: [
@@ -68,8 +69,15 @@ test("record", () => {
 })
 
 test("recordWithComment", () => {
-  let r = record().parse(Streams.ofString("2020-11-17 Some store  ; id=123 \n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
+  let r = record().parse(Streams.ofString("2020-11-17 Some store  ; id:123 \n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
   expect(r.isAccepted()).toEqual(true);
+  expect(r.value.id).toEqual("123")
+})
+
+test("recordWithNonIdComment", () => {
+  let r = record().parse(Streams.ofString("2020-11-17 Some store  ; seqno:1 \n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
+  expect(r.isAccepted()).toEqual(true);
+  expect(r.value.id).toEqual(null)
 })
 
 test("blanks", () => {

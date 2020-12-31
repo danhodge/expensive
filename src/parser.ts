@@ -12,6 +12,7 @@ interface CommentLine extends Record {
 }
 
 interface TransactionRecord extends Record {
+  id?: string
   date: Date
   description: string
   postings: Posting[]
@@ -88,21 +89,36 @@ export function posting(): SingleParser<Posting> {
     .map(tuple => new Posting(-1, tuple.at(0), tuple.at(1)));  // TODO: stop hard-coding posting id
 }
 
-function recordDesc(): SingleParser<[Date, string]> {
+function recordDesc(): SingleParser<[Date, string, string?]> {
   return date()
     .then(nonNewlineWhitespace1().drop())
     .then(description())
-    .then(comment().opt().drop())  // TODO: need to stop dropping this
+    .then(comment().opt())
     .then(C.char("\n").drop())
-    .map(tuple => [tuple.at(0), tuple.at(1)]);
+    .map(tuple => [tuple.at(0), tuple.at(1), tuple.at(2)]);
+}
+
+function extractId(tagsStr: string): string {
+  let idTag = tagsStr.split(",").find(v => v.includes("id:"));
+  if (idTag != null) {
+    return idTag.split(":")[1].trim();
+  } else {
+    return null;
+  }
 }
 
 export function record(): SingleParser<TransactionRecord> {
-  // TODO: group each record into its own array
   return recordDesc()
     .then(posting().rep())
     .then(F.try(blankLine()).or(F.eos()).drop())
-    .map(tuple => { return { date: tuple.at(0)[0] as Date, description: tuple.at(0)[1], postings: drop(tuple.array(), 1) } });
+    .map(tuple => {
+      return {
+        date: tuple.at(0)[0] as Date,
+        description: tuple.at(0)[1],
+        id: tuple.at(0)[2].map(extractId).orElse(null),
+        postings: drop(tuple.array(), 1)
+      }
+    });
 }
 
 function comment(): SingleParser<string> {
