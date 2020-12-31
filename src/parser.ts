@@ -1,6 +1,29 @@
-import { Response, Streams, N, C, F, SingleParser, TupleParser, Tuple } from '@masala/parser';
+import { Streams, N, C, F, SingleParser, TupleParser } from '@masala/parser';
 import { Posting } from './posting';
-import { Transaction } from './transaction';
+
+interface Record {
+}
+
+interface BlankLine extends Record {
+}
+
+interface CommentLine extends Record {
+  text: string
+}
+
+interface TransactionRecord extends Record {
+  date: Date
+  description: string
+  postings: Posting[]
+}
+
+function keepRecord(record: Record): boolean {
+  if ((record as TransactionRecord).date) {
+    return true;
+  } else {
+    return false;
+  }
+}
 
 export function nonNewlineWhitespace(): TupleParser<string> {
   return C.charIn(" \t").optrep();
@@ -10,8 +33,8 @@ export function nonNewlineWhitespace1(): TupleParser<string> {
   return C.charIn(" \t").then(C.charIn(" \t").optrep());
 }
 
-export function blankLine(): TupleParser<string> {
-  return nonNewlineWhitespace().then(C.charIn("\n"));
+export function blankLine(): SingleParser<BlankLine> {
+  return nonNewlineWhitespace().then(C.charIn("\n")).map(() => { return {} });
 }
 
 export function date(): SingleParser<Date> {
@@ -74,50 +97,45 @@ function recordDesc(): SingleParser<[Date, string]> {
     .map(tuple => [tuple.at(0), tuple.at(1)]);
 }
 
-export function record(): TupleParser<String> {
+export function record(): SingleParser<TransactionRecord> {
   // TODO: group each record into its own array
   return recordDesc()
     .then(posting().rep())
-    .then(F.try(blankLine()).or(F.eos()).drop());
+    .then(F.try(blankLine()).or(F.eos()).drop())
+    .map(tuple => { return { date: tuple.at(0)[0] as Date, description: tuple.at(0)[1], postings: drop(tuple.array(), 1) } });
 }
 
-function comment(): TupleParser<string> {
+function comment(): SingleParser<string> {
   return C.char(';').drop()
-    .then(C.charNotIn("\n").optrep());
+    .then(C.charNotIn("\n").optrep())
+    .map(v => v.join("").trim());
 }
 
-export function commentAndNewline(): TupleParser<string> {
-  return comment().then(C.char("\n").drop());
+export function commentAndNewline(): SingleParser<CommentLine> {
+  return nonNewlineWhitespace().opt().then(comment()).then(C.char("\n").drop()).map(tuple => { return { text: tuple.at(1) } });
 }
 
-function recordBlankLineOrCommentLine(): SingleParser<Transaction> {
-  return F.try(record())
-    .or(F.try(blankLine().drop()).or(commentAndNewline().drop()))
-    .map(
-      (tuple: Tuple<string> | symbol) => {
-        if (typeof tuple === "symbol") {
-          return null;
-        } else {
-          let postings = new Array<Posting>();
-          let i = 1;
-          for (; i < tuple.size(); i++) {
-            // the tuple tuple is being specified as Posting but I think it's being thrown away
-            let posting: unknown = tuple.at(i);
-            postings.push(posting as Posting);
-          }
+function drop<T>(arr: T[], count: number): T[] {
+  let result = new Array<T>();
+  let i = count;
+  for (; i < arr.length; i++) {
+    result.push(arr[i]);
+  }
 
-          // the tuple type is specified as [Date, string] but I think it's being thrown away
-          let date: unknown = tuple.at(0)[0];
-          return new Transaction(-1, (date as Date), tuple.at(0)[1], postings);
-        }
-      }
-    );
+  return result;
 }
 
-export function hledger(): TupleParser<Transaction> {
+function recordBlankLineOrCommentLine(): SingleParser<Record> {
+  return F.try(record()).or(F.try(blankLine()).or(commentAndNewline()));
+}
+
+export function hledger(): TupleParser<Record> {
   return recordBlankLineOrCommentLine().optrep().then(F.eos());
 }
 
-export function parse(input: string): Response<Tuple<Transaction>> {
-  return hledger().parse(Streams.ofString(input));
+export function parse(input: string): Record[] {
+  let result = hledger().parse(Streams.ofString(input));
+  if (result.isAccepted()) {
+    return result.value.array().filter(keepRecord);
+  }
 }

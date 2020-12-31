@@ -34,7 +34,7 @@ test("nonNewlineWhitespace1 no whitespace characters", () => {
 test("posting", () => {
   let r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value).toEqual(["expenses:food:fast food", -123]);
+  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, id: -1 });
 });
 
 test("blankLine", () => {
@@ -48,15 +48,23 @@ test("blankLine with whitespace", () => {
 });
 
 test("commentAndNewline", () => {
-  let r = commentAndNewline().parse(Streams.ofString("; no comment\n\n"));
+  let r = commentAndNewline().parse(Streams.ofString(" \t   ; no comment\n\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.offset).toEqual(13);
+  expect(r.offset).toEqual(18);
+  expect(r.value).toEqual({ text: "no comment" });
 });
 
 test("record", () => {
   let r = record().parse(Streams.ofString("2020-11-17 Some store\n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value.value).toEqual([[new Date(Date.parse("2020-11-17")), "Some store"], ["expenses:food:groceries", -123], ["assets:cash", 123]]);
+  expect(r.value).toEqual({
+    date: new Date(Date.parse("2020-11-17")),
+    description: "Some store",
+    postings: [
+      { category: "expenses:food:groceries", amountCents: -123, id: -1 },
+      { category: "assets:cash", amountCents: 123, id: -1 }
+    ]
+  });
 })
 
 test("recordWithComment", () => {
@@ -94,7 +102,7 @@ test("posting", () => {
   let data = "    expenses:unclassified                 $900.00\n";
   let r = posting().parse(Streams.ofString(data));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value).toEqual(["expenses:unclassified", 90000]);
+  expect(r.value).toEqual({ category: "expenses:unclassified", amountCents: 90000, id: -1 });
 })
 
 test("comment, blank & record", () => {
