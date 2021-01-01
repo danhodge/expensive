@@ -85,8 +85,9 @@ export function posting(): SingleParser<Posting> {
     .then(postingDescription())
     .then(nonNewlineWhitespace().drop())
     .then(amount())
+    .then(nonNewlineWhitespace().drop().then(comment().opt()))
     .then(C.char("\n").drop())
-    .map(tuple => new Posting(-1, tuple.at(0), tuple.at(1)));  // TODO: stop hard-coding posting id
+    .map(tuple => new Posting(tuple.at(2).map(extractId).orElse(null), tuple.at(0), tuple.at(1)));
 }
 
 function recordDesc(): SingleParser<[Date, string, string?]> {
@@ -100,7 +101,7 @@ function recordDesc(): SingleParser<[Date, string, string?]> {
 
 function extractId(tagsStr: string): string {
   let idTag = tagsStr.split(",").find(v => v.includes("id:"));
-  if (idTag != null) {
+  if (idTag) {
     return idTag.split(":")[1].trim();
   } else {
     return null;
