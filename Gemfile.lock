@@ -1,10 +1,27 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    FooBarWidget-money (2.1.4)
     mustermann (1.0.3)
+    parsby (1.1.1)
+    quicken_parser (0.2.1)
+      FooBarWidget-money (~> 2)
     rack (2.0.7)
     rack-protection (2.0.5)
       rack
+    rspec (3.10.0)
+      rspec-core (~> 3.10.0)
+      rspec-expectations (~> 3.10.0)
+      rspec-mocks (~> 3.10.0)
+    rspec-core (3.10.0)
+      rspec-support (~> 3.10.0)
+    rspec-expectations (3.10.0)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.10.0)
+    rspec-mocks (3.10.0)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.10.0)
+    rspec-support (3.10.0)
     sinatra (2.0.5)
       mustermann (~> 1.0)
       rack (~> 2.0)
@@ -16,6 +33,9 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  parsby
+  quicken_parser
+  rspec
   sinatra (~> 2.0)
 
 BUNDLED WITH
