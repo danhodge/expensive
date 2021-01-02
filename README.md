@@ -13,3 +13,10 @@ elm make src/Transactions.elm --output=public/js/transactions.js --debug
 ``` bash
 npm run test
 ```
+
+## Server
+
+``` bash
+# Start Server
+npm run start:wp
+```
