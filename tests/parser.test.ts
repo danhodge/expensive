@@ -125,12 +125,23 @@ test("comment, blank & record", () => {
 test("hledger", () => {
   let data = "; journal file\n" +
     "\n" +
-    "2020-10-01 big stuff ; id=123\n" +
+    "2020-10-01 big stuff ; id:123\n" +
     "    expenses:import              $100.00\n" +
     "    assets:cash                 $-100.00\n";
 
   let r = hledger().parse(Streams.ofString(data));
   expect(r.isAccepted()).toEqual(true);
+});
+
+test("parse", () => {
+  let data = "; journal file\n" +
+    "\n" +
+    "2020-10-01 big stuff ; id:123\n" +
+    "    expenses:import              $100.00 ; id:456\n" +
+    "    assets:cash                 $-100.00 ; id:789\n";
+
+  let r = parse(data);
+  expect(r.length).toEqual(1);
 });
 
 // test("realData", () => {
