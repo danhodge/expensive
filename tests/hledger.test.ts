@@ -1,4 +1,4 @@
-import { Token, tokenType, tokenize, parse } from '../src/hledger'
+import { Token, tokenType, tokenize, Description, Posting, decodeLine } from '../src/hledger'
 import * as memoryStreams from 'memory-streams'
 
 function nextToken(tokenIter: Generator<Token>): Token {
@@ -64,15 +64,84 @@ test("tokenize", () => {
   expect(tokenIter.next().done).toBe(true);
 });
 
-test("parse", () => {
-  let journal = `; journal
+// test("blankOrComment", () => {
+//   let line = ";;;; comments ;;;;";
 
-2020-10-09 Big Faceless Corporation
-    expenses:food:spices  $12.99
-    assets:checking      $-12.99
-`;
-  let tokenIter = tokenize(new memoryStreams.ReadableStream(journal));
-  let txns = parse(tokenIter);
+//   isBlankLine(line).orElse(() => isCommentLine(line)).caseOf({
+//     Nothing: () => fail("Should have worked"),
+//     Just: (line) => {
+//       line.caseOf({
+//         Comment: (comment: string) => expect(comment).toEqual(";;; comments ;;;;"),
+//         _: () => fail("Should have worked")
+//       })
+//     }
+//   });
+// });
 
-  expect(txns.length).toEqual(1);
+test("isCommentLine", () => {
+  let line = "  ;FIXME fix me";
+
+  decodeLine(line).caseOf({
+    Comment: (comment: string) => {
+      expect(comment).toEqual("FIXME fix me");
+    },
+    _: () => fail("Should have worked")
+  });
 });
+
+test("isCommentLine", () => {
+  let line = ";  TODO: fix me ";
+
+  decodeLine(line).caseOf({
+    Comment: (comment: string) => {
+      expect(comment).toEqual("  TODO: fix me ");
+    },
+    _: () => fail("Should have worked")
+  });
+});
+
+test("isDescriptionLine", () => {
+  let line = "2020-10-20  Food and Stuff  ; tag=value";
+
+  decodeLine(line).caseOf({
+    Description: (d: Description) => {
+      expect(d.date).toEqual("2020-10-20");
+      expect(d.desc).toEqual("Food and Stuff");
+    },
+    _: () => fail("Should have worked")
+  });
+});
+
+test("isBlankLine", () => {
+  let line = "   \n"
+
+  decodeLine(line).caseOf({
+    Blank: () => true,
+    _: () => fail("Should have worked")
+  });
+});
+
+test("isPostingLine", () => {
+  let line = "    expenses:unclassified                 $-900.00";
+
+  decodeLine(line).caseOf({
+    Posting: (p: Posting) => {
+      expect(p.category).toEqual("expenses:unclassified");
+      expect(p.amountCents).toEqual(-90000);
+    },
+    _: () => fail("Should have worked")
+  });
+});
+
+// test("parse", () => {
+//   let journal = `; journal
+
+// 2020-10-09 Big Faceless Corporation
+//     expenses:food:spices  $12.99
+//     assets:checking      $-12.99
+// `;
+//   let tokenIter = tokenize(new memoryStreams.ReadableStream(journal));
+//   let txns = parse(tokenIter);
+
+//   expect(txns.length).toEqual(1);
+// });
