@@ -1,4 +1,6 @@
 import { Request, Response, Router } from 'express';
+import { readFileSync } from 'fs';
+import { parse } from './parser'
 
 const router = Router();
 
@@ -7,7 +9,8 @@ const router = Router();
 // router.use("foo", FooRoutes)
 
 router.get("/transactions", (req: Request, res: Response) => {
-  res.json([]);
+  let data = readFileSync('test.journal').toString();
+  res.json(parse(data));
 });
 
 export default router;
