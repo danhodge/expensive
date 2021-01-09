@@ -7,3 +7,6 @@ export const app = express();
 app.use(express.json());
 
 app.use("/", Router);
+
+app.set("views", "build/views");
+app.set("view engine", "hbs");

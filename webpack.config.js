@@ -2,6 +2,8 @@ var webpack = require('webpack');
 var path = require('path');
 var fs = require('fs');
 
+var CopyWebpackPlugin =  require('copy-webpack-plugin');
+
 var nodeModules = {};
 fs.readdirSync('node_modules')
   .filter(function(x) {
@@ -11,27 +13,36 @@ fs.readdirSync('node_modules')
     nodeModules[mod] = 'commonjs ' + mod;
   });
 
-  module.exports = {
-    entry: './main.ts',
-    mode: 'development',
-    context: path.join(__dirname, 'src', 'server'),
-    target: 'node',
-    output: {
-      path: path.join(__dirname, 'build'),
-      filename: 'main.js'
-    },
-    externals: nodeModules,
-    resolve: {
-      extensions: ['.ts', '.js'],
-    },
-    module: {
-      rules: [
-        {
-          test: /\.ts$/,
-          use: [
-            'ts-loader'
-         ]
-        }
+module.exports = {
+  entry: './main.ts',
+  mode: 'development',
+  context: path.join(__dirname, 'src', 'server'),
+  target: 'node',
+  output: {
+    path: path.join(__dirname, 'build'),
+    filename: 'main.js'
+  },
+  externals: nodeModules,
+  resolve: {
+    extensions: ['.ts', '.js'],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        use: [
+          'ts-loader'
+       ]
+      }
+    ]
+  },
+  plugins: [
+    new webpack.BannerPlugin('require("source-map-support").install();'),
+    new CopyWebpackPlugin({
+      patterns: [
+       { from: '../../views', to: 'views' },
       ]
-    }
- }
+    })
+  ],
+  devtool: 'source-map'
+}

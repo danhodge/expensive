@@ -8,6 +8,10 @@ const router = Router();
 // import FooRoutes from "./foo"
 // router.use("foo", FooRoutes)
 
+router.get("/", (req: Request, res: Response) => {
+  res.render("transactions");
+});
+
 router.get("/transactions", (req: Request, res: Response) => {
   let data = readFileSync('test.journal').toString();
   res.json(parse(data));
