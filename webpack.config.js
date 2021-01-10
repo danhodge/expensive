@@ -13,7 +13,7 @@ fs.readdirSync('node_modules')
     nodeModules[mod] = 'commonjs ' + mod;
   });
 
-module.exports = {
+const serverConfig = {
   entry: './main.ts',
   mode: 'development',
   context: path.join(__dirname, 'src', 'server'),
@@ -46,3 +46,31 @@ module.exports = {
   ],
   devtool: 'source-map'
 }
+
+const clientConfig = {
+  entry: [
+    './index.js'
+  ],
+  target: 'web',
+  mode: 'development',
+  context: path.join(__dirname, 'src', 'client'),
+  output: {
+    path: path.join(__dirname, 'build', 'public'),
+    filename: 'transactions.js'
+  },
+  module: {
+    rules: [
+      {
+        test: /\.elm$/,
+        exclude: [/elm-stuff/, /node_modules/],
+        loader: "elm-webpack-loader",
+        options: {
+          debug: true,
+          cwd: path.join(__dirname, 'src', 'client'),
+        }
+      }
+    ]
+  }
+}
+
+module.exports = [serverConfig, clientConfig];

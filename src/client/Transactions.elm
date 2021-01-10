@@ -2,6 +2,7 @@ module Transactions exposing (Flags, Model, Msg(..), Transaction, init, initialM
 
 import Browser
 import Browser.Dom
+import Category as Category exposing (..)
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -9,12 +10,11 @@ import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
 import Http
 import Json.Decode as Decode exposing (Decoder, field, map2, map3, map4, map5)
 import Json.Encode as Encode exposing (..)
+import Money as Money exposing (..)
 import String
 import Task
 import Url.Builder
 import Zondicon exposing (Zondicon, zondicon)
-import Category as Category exposing (..)
-import Money as Money exposing (..)
 
 
 
@@ -70,7 +70,6 @@ type alias Posting =
 type Transaction
     = SavedTransaction TransactionRecord
     | EditableSavedTransaction TransactionRecord TransactionData
-
 
 
 
@@ -163,7 +162,6 @@ update message model =
             let
                 nonEmptyCategory posting =
                     nonEmptyCategoryFilter posting.category
-
             in
             ( { model | transactions = List.map (filteredIdentityMapper (matchTransactionId id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap nonEmptyCategory (toRecord updatedTxn).data.postings) model.categories }, Cmd.none )
 
@@ -469,7 +467,7 @@ saveTransactionDecoder =
 getTransactions : Cmd Msg
 getTransactions =
     Http.get
-        { url = "http://localhost:4567/transactions"
+        { url = "http://localhost:3000/transactions"
         , expect = Http.expectJson NewTransactions (Decode.list transactionDecoder)
         }
 
@@ -491,7 +489,7 @@ saveChanges transaction =
                         (Http.request
                             { method = "PUT"
                             , headers = []
-                            , url = Url.Builder.crossOrigin "http://localhost:4567" [ "transactions", String.fromInt record.id ] []
+                            , url = Url.Builder.crossOrigin "http://localhost:3000" [ "transactions", String.fromInt record.id ] []
                             , body = Http.jsonBody value
                             , expect = Http.expectJson (ChangesSaved record.id) saveTransactionDecoder
                             , timeout = Nothing
@@ -754,6 +752,7 @@ postingText editable posting =
         noCategoryText =
             if editable then
                 Just ""
+
             else
                 Nothing
     in
@@ -835,7 +834,6 @@ postingAmountAttributes amount transaction =
 
                 Nothing ->
                     []
-
 
 
 inputId : String -> Int -> String

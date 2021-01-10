@@ -8,5 +8,8 @@ app.use(express.json());
 
 app.use("/", Router);
 
+// serve static files out of the build/public/ directory
+app.use(express.static('build/public'));
+
 app.set("views", "build/views");
 app.set("view engine", "hbs");
