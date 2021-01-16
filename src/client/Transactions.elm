@@ -46,8 +46,13 @@ type Message
     | Error String
 
 
+type Identifier
+    = IntIdentifier Int
+    | StringIdentifier String
+
+
 type alias TransactionRecord =
-    { id : Int
+    { id : String
     , date : String
     , amountCents : Int
     , data : TransactionData
@@ -100,14 +105,14 @@ init flags =
 type Msg
     = Noop
     | NewTransactions (Result Http.Error (List Transaction))
-    | Click Int String
-    | CancelEditor Int
-    | SetDescription Int Description
-    | SetPostingName Int Int CategorySetting
-    | SetPostingAmount Int Int String
-    | RemovePosting Int Int
+    | Click String String
+    | CancelEditor String
+    | SetDescription String Description
+    | SetPostingName String Int CategorySetting
+    | SetPostingAmount String Int String
+    | RemovePosting String Int
     | SaveChanges Transaction
-    | ChangesSaved Int (Result Http.Error Transaction)
+    | ChangesSaved String (Result Http.Error Transaction)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -197,7 +202,7 @@ restoreOriginalData transaction =
             SavedTransaction { record | data = originalData }
 
 
-matchTransactionId : Int -> Transaction -> Bool
+matchTransactionId : String -> Transaction -> Bool
 matchTransactionId id txn =
     (txn |> toRecord |> .id) == id
 
@@ -239,7 +244,7 @@ updateTransactionData transaction updateFn =
             EditableSavedTransaction { record | data = updateFn curData } originalData
 
 
-updateTransaction : List Transaction -> Int -> (Transaction -> Transaction) -> List Transaction
+updateTransaction : List Transaction -> String -> (Transaction -> Transaction) -> List Transaction
 updateTransaction transactions id updateFn =
     let
         matchIdUpdateFn txn =
@@ -290,7 +295,7 @@ updateMatchedPosting updateFn targetIdx postingIdx posting =
         Just posting
 
 
-updateTransactionAndPosting : List Transaction -> Int -> Int -> (Posting -> Maybe Posting) -> List Transaction
+updateTransactionAndPosting : List Transaction -> String -> Int -> (Posting -> Maybe Posting) -> List Transaction
 updateTransactionAndPosting transactions txnId postIdx updatePostingFn =
     let
         updateTxnFn transaction =
@@ -343,7 +348,7 @@ encodeTransaction transaction =
     case postingsResult of
         Ok value ->
             Ok
-                ([ ( "id", Encode.int record.id )
+                ([ ( "id", Encode.string record.id )
                  , ( "date", Encode.string record.date )
                  , ( "amountCents", Encode.int record.amountCents )
                  , ( "description", Encode.string record.data.description )
@@ -438,7 +443,7 @@ postingDecoder =
         (field "amountCents" Decode.int)
 
 
-decodedTransaction : Int -> String -> Int -> Description -> List Posting -> Transaction
+decodedTransaction : String -> String -> Int -> Description -> List Posting -> Transaction
 decodedTransaction id date amountCents description postings =
     SavedTransaction (TransactionRecord id date amountCents (TransactionData description postings))
 
@@ -446,7 +451,7 @@ decodedTransaction id date amountCents description postings =
 transactionDecoder : Decoder Transaction
 transactionDecoder =
     map5 decodedTransaction
-        (field "id" Decode.int)
+        (field "id" Decode.string)
         (field "date" Decode.string)
         (field "amountCents" Decode.int)
         (field "description" Decode.string)
@@ -489,7 +494,7 @@ saveChanges transaction =
                         (Http.request
                             { method = "PUT"
                             , headers = []
-                            , url = Url.Builder.crossOrigin "http://localhost:3000" [ "transactions", String.fromInt record.id ] []
+                            , url = Url.Builder.crossOrigin "http://localhost:3000" [ "transactions", record.id ] []
                             , body = Http.jsonBody value
                             , expect = Http.expectJson (ChangesSaved record.id) saveTransactionDecoder
                             , timeout = Nothing
@@ -576,7 +581,7 @@ transactionRow transaction =
             classes cssClasses
                 ++ (case transaction of
                         SavedTransaction _ ->
-                            clickable transaction (descInputId record.id)
+                            clickable transaction (descInputId (StringIdentifier record.id))
 
                         EditableSavedTransaction _ _ ->
                             []
@@ -639,7 +644,7 @@ transactionDescription transaction =
                 , value record.data.description
                 , onInput (SetDescription record.id)
                 , editorKeyHandler (Dict.fromList [ ( 27, CancelEditor record.id ), ( 13, SaveChanges transaction ) ])
-                , id (descInputId record.id)
+                , id (descInputId (StringIdentifier record.id))
                 ]
                 []
 
@@ -690,7 +695,7 @@ postingRow transaction postingIndex posting =
             transaction |> toRecord |> .id
 
         domId idPrefix =
-            inputId (inputId idPrefix txnId) postingIndex
+            inputId (inputId idPrefix (StringIdentifier txnId)) (IntIdentifier postingIndex)
 
         cells =
             [ td [ class "w-9/12" ] [ postingCategoryEditor transaction postingIndex domId displayText ]
@@ -836,12 +841,17 @@ postingAmountAttributes amount transaction =
                     []
 
 
-inputId : String -> Int -> String
+inputId : String -> Identifier -> String
 inputId prefix id =
-    prefix ++ String.fromInt id
+    case id of
+        IntIdentifier i ->
+            prefix ++ String.fromInt i
+
+        StringIdentifier s ->
+            prefix ++ s
 
 
-descInputId : Int -> String
+descInputId : Identifier -> String
 descInputId id =
     inputId "desc-" id
 
