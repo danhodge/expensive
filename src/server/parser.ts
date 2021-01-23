@@ -1,5 +1,6 @@
 import { Streams, N, C, F, SingleParser, TupleParser } from '@masala/parser';
 import { Posting } from './posting';
+import { Transaction } from './transaction';
 
 interface Record {
 }
@@ -11,7 +12,7 @@ interface CommentLine extends Record {
   text: string
 }
 
-interface TransactionRecord extends Record {
+export interface TransactionRecord extends Record {
   id?: string
   date: Date
   description: string
@@ -113,12 +114,11 @@ export function record(): SingleParser<TransactionRecord> {
     .then(posting().rep())
     .then(F.try(blankLine()).or(F.eos()).drop())
     .map(tuple => {
-      return {
-        date: tuple.at(0)[0] as Date,
-        description: tuple.at(0)[1],
-        id: tuple.at(0)[2].map(extractId).orElse(null),
-        postings: drop(tuple.array(), 1)
-      }
+      let postings = indexMap(drop(tuple.array(), 1), (posting, idx) => {
+        return new Posting(idx, posting.category, posting.amountCents)
+      });
+
+      return new Transaction(tuple.at(0)[2].map(extractId).orElse(null), tuple.at(0)[0] as Date, tuple.at(0)[1], postings);
     });
 }
 
@@ -140,6 +140,15 @@ function drop<T>(arr: T[], count: number): T[] {
   }
 
   return result;
+}
+
+function indexMap<T, U>(arr: T[], fn: (val: T, index: number) => U): U[] {
+  let results = new Array<U>();
+  for (let i = 0; i < arr.length; i++) {
+    results.push(fn(arr[i], i));
+  }
+
+  return results;
 }
 
 function recordBlankLineOrCommentLine(): SingleParser<Record> {
