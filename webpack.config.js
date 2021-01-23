@@ -73,4 +73,35 @@ const clientConfig = {
   }
 }
 
-module.exports = [serverConfig, clientConfig];
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+
+const tailwindConfig = {
+  entry: [
+    './public/css/style.css',
+  ],
+  target: 'web',
+  mode: 'development',
+  output: {
+    path: path.join(__dirname, 'build', 'public', 'css'),
+    filename: 'style.css'
+  },
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: [
+          MiniCssExtractPlugin.loader,
+          "css-loader", "postcss-loader"
+        ]
+      }
+    ]
+  },
+  plugins: [
+    new MiniCssExtractPlugin({
+      filename: "styles.css",
+      chunkFilename: "styles.css"
+    })
+  ]
+};
+
+module.exports = [serverConfig, clientConfig, tailwindConfig];
