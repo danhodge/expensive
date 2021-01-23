@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 import { readFileSync } from 'fs';
 import { parse } from './parser'
+import { serialize } from './transaction'
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.get("/", (req: Request, res: Response) => {
 
 router.get("/transactions", (req: Request, res: Response) => {
   let data = readFileSync('test.journal').toString();
-  res.json(parse(data));
+  res.json(parse(data).map(serialize));
 });
 
 export default router;
