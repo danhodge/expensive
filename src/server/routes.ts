@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 import { readFileSync } from 'fs';
-import { parse } from './parser'
+import { parse, flatten } from './parser'
 import { serialize } from './transaction'
 
 const router = Router();
@@ -10,7 +10,11 @@ const router = Router();
 // router.use("foo", FooRoutes)
 
 router.get("/", (req: Request, res: Response) => {
-  res.render("transactions");
+  let data = readFileSync('test.journal').toString();
+  let flatCategories = flatten(parse(data).map(f => f.postings.map(p => p.category)));
+  let uniqCategories = [...new Set(flatCategories)].sort();
+
+  res.render("transactions", { categories: uniqCategories });
 });
 
 router.get("/transactions", (req: Request, res: Response) => {

@@ -3,5 +3,5 @@ var Elm = require('./Transactions.elm').Elm;
 
 Elm.Transactions.init({
   node: document.getElementById('elm-app'),
-  flags: { categories: [] }
+  flags: { categories: _categories }
 });

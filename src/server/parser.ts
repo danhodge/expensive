@@ -151,6 +151,22 @@ function indexMap<T, U>(arr: T[], fn: (val: T, index: number) => U): U[] {
   return results;
 }
 
+function filterMap<T, U>(arr: T[], fn: (val: T) => U): U[] {
+  let results = new Array<U>();
+  for (let i = 0; i < arr.length; i++) {
+    let result = fn(arr[i]);
+    if (result) {
+      results.push(result);
+    }
+  }
+
+  return results;
+}
+
+export function flatten<T>(arr: any): T[] {
+  return ([] as T[]).concat(...arr);
+}
+
 function recordBlankLineOrCommentLine(): SingleParser<Record> {
   return F.try(record()).or(F.try(blankLine()).or(commentAndNewline()));
 }
@@ -159,9 +175,15 @@ export function hledger(): TupleParser<Record> {
   return recordBlankLineOrCommentLine().optrep().then(F.eos());
 }
 
-export function parse(input: string): Record[] {
+export function parse(input: string): TransactionRecord[] {
   let result = hledger().parse(Streams.ofString(input));
   if (result.isAccepted()) {
-    return result.value.array().filter(keepRecord);
+    return filterMap(result.value.array(), record => {
+      if (keepRecord(record)) {
+        return record as TransactionRecord;
+      } else {
+        return null;
+      }
+    });
   }
 }
