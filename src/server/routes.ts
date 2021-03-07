@@ -1,7 +1,9 @@
 import { Request, Response, Router } from 'express';
 import { readFileSync } from 'fs';
 import { parse, flatten } from './parser'
-import { serialize } from './transaction'
+import { transactionDecoder, serialize } from './transaction'
+import { Database } from './database'
+import { decodeObject } from './json'
 
 const router = Router();
 
@@ -17,9 +19,40 @@ router.get("/", (req: Request, res: Response) => {
   res.render("transactions", { categories: uniqCategories });
 });
 
-router.get("/transactions", (req: Request, res: Response) => {
-  let data = readFileSync('test.journal').toString();
-  res.json(parse(data).map(serialize));
+const db = new Database('test.journal');
+
+// idea
+// reading
+// 1. lock file
+// 2. read data into memory, store data & version
+// 3. unlock file
+// writing
+// 1. lock file
+// 2. read version
+// 3. check to see if it matches expected version
+// 4. increment version and write updated file
+// 5. unlock file
+router.get("/transactions", async (req: Request, res: Response, next) => {
+  // see: https://www.wisdomgeek.com/development/web-development/using-async-await-in-expressjs/
+  try {
+    let txns = await db.transactions();
+    res.json(txns.map(serialize));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/transactions/:id", (req: Request, res: Response) => {
+  console.log(`Updating transaction: ${req.params.id} = ${JSON.stringify(req.body)}`);
+  decodeObject(transactionDecoder, req.body).caseOf({
+    Err: err => {
+      res.status(400).json({ status: `Error: ${err}` });
+    },
+    Ok: txn => {
+      db.updateTransaction(req.params.id, txn);
+      res.json({ status: "OK", transaction: req.body });
+    }
+  });
 });
 
 export default router;
