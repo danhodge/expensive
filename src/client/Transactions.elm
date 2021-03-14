@@ -29,10 +29,6 @@ type alias Currency =
     String
 
 
-type alias PostingId =
-    Int
-
-
 type alias Model =
     { transactions : List Transaction
     , categories : List Category
@@ -66,7 +62,7 @@ type alias TransactionData =
 
 
 type alias Posting =
-    { id : Maybe PostingId
+    { index : Int
     , category : CategorySetting
     , amount : String
     }
@@ -271,6 +267,14 @@ ensureEmptyPosting postings =
     let
         hasEmptyPosting =
             List.any emptyPosting postings
+
+        nextPostingIndex =
+            case postings |> List.map .index |> List.maximum of
+                Just val ->
+                    val + 1
+
+                Nothing ->
+                    0
     in
     if hasEmptyPosting then
         postings
@@ -278,7 +282,7 @@ ensureEmptyPosting postings =
     else
         -- TODO: defaualt amount to remaining balance
         -- TODO: maybe empty posting should be a different type of posting?
-        postings ++ [ Posting Nothing NoCategory "" ]
+        postings ++ [ Posting nextPostingIndex NoCategory "" ]
 
 
 updatePosting : Int -> (Posting -> Maybe Posting) -> List Posting -> List Posting
@@ -408,7 +412,7 @@ encodePosting posting =
     case amountCents of
         Just cents ->
             Ok
-                ([ maybeEncodeField "id" Encode.int posting.id
+                ([ Just ( "index", Encode.int posting.index )
                  , Just ( "category", Encode.string category )
                  , Just ( "amountCents", Encode.int cents )
                  ]
@@ -420,25 +424,15 @@ encodePosting posting =
             Err ("Cannot convert " ++ posting.amount ++ " into cents")
 
 
-maybeEncodeField : String -> (a -> Encode.Value) -> Maybe a -> Maybe ( String, Value )
-maybeEncodeField fieldName encoder value =
-    case value of
-        Just val ->
-            Just ( fieldName, encoder val )
-
-        Nothing ->
-            Nothing
-
-
 decodedPosting : Int -> String -> Int -> Posting
-decodedPosting id category amountCents =
-    Posting (Just id) (toCategorySetting category) (toCurrency amountCents)
+decodedPosting index category amountCents =
+    Posting index (toCategorySetting category) (toCurrency amountCents)
 
 
 postingDecoder : Decoder Posting
 postingDecoder =
     map3 decodedPosting
-        (field "id" Decode.int)
+        (field "index" Decode.int)
         (field "category" Decode.string)
         (field "amountCents" Decode.int)
 

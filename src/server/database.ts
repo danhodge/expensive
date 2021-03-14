@@ -1,7 +1,7 @@
-import { existsSync } from 'fs'
+import { existsSync, writeFile } from 'fs'
 import { readPath } from './files'
 import { parse, TransactionRecord } from './parser'
-import { Transaction } from './transaction'
+import { Transaction, hledgerTransactionSerialize } from './transaction'
 
 enum DatabaseState {
   Initialized,
@@ -42,8 +42,15 @@ export class Database {
   updateTransaction(id: string, record: TransactionRecord): TransactionRecord {
     let idx = this.transactionRecords.findIndex(element => element.id == id);
     if (idx != -1) {
-      // TODO: store to disk
       this.transactionRecords[idx] = new Transaction(id, record.date, record.description, record.postings);
+      // TODO: lock file
+      writeFile(this.filePath, this.transactionRecords.map(hledgerTransactionSerialize).join("\n\n"), (err) => {
+        if (err) {
+          // TODO: what to do here? retry
+          console.log(`Error writing file: ${err}`);
+        }
+      });
+
       return record;
     } else {
       // TODO: what to do on error?
