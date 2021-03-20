@@ -7,19 +7,20 @@ import { decodeObject } from './json'
 
 const router = Router();
 
+const db = new Database('test.journal');
+
 // TODO: for larger apps, define routes in separate files and register them here
 // import FooRoutes from "./foo"
 // router.use("foo", FooRoutes)
 
-router.get("/", (req: Request, res: Response) => {
-  let data = readFileSync('test.journal').toString();
-  let flatCategories = flatten(parse(data).map(f => f.postings.map(p => p.category)));
-  let uniqCategories = [...new Set(flatCategories)].sort();
-
-  res.render("transactions", { categories: uniqCategories });
+router.get("/", async (req: Request, res: Response, next) => {
+  try {
+    let uniqCategories = await db.categoryNames();
+    res.render("transactions", { categories: uniqCategories });
+  } catch (error) {
+    next(error);
+  }
 });
-
-const db = new Database('test.journal');
 
 // idea
 // reading

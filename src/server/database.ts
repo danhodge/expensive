@@ -1,6 +1,6 @@
 import { existsSync, writeFile } from 'fs'
 import { readPath } from './files'
-import { parse, TransactionRecord } from './parser'
+import { parse, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionSerialize } from './transaction'
 
 enum DatabaseState {
@@ -32,13 +32,21 @@ export class Database {
       console.log("Read file from disk");
       // TODO: store version
       this.transactionRecords = parse(data);
+      console.log("Parsed transaction records");
+      // TODO: fail if transaction were not loaded successfully
       this.state = DatabaseState.Loaded;
 
       return this.transactionRecords;
     }
   }
 
-  // TODO: properly fill in ids for new postings
+  async categoryNames(): Promise<string[]> {
+    let txns = await this.transactions();
+    let flatCategories: string[] = flatten(txns.map(txn => txn.postings.map(p => p.category)));
+
+    return [...new Set(flatCategories)].sort();
+  }
+
   updateTransaction(id: string, record: TransactionRecord): TransactionRecord {
     let idx = this.transactionRecords.findIndex(element => element.id == id);
     if (idx != -1) {
