@@ -1,7 +1,7 @@
 import { existsSync, writeFile } from 'fs'
-import { readPath } from './files'
+import { readPath, writePath } from './files'
 import { parse, flatten, TransactionRecord } from './parser'
-import { Transaction, hledgerTransactionSerialize } from './transaction'
+import { Transaction, hledgerTransactionsSerialize } from './transaction'
 
 enum DatabaseState {
   Initialized,
@@ -47,17 +47,12 @@ export class Database {
     return [...new Set(flatCategories)].sort();
   }
 
-  updateTransaction(id: string, record: TransactionRecord): TransactionRecord {
+  async updateTransaction(id: string, record: TransactionRecord): Promise<TransactionRecord> {
     let idx = this.transactionRecords.findIndex(element => element.id == id);
     if (idx != -1) {
       this.transactionRecords[idx] = new Transaction(id, record.date, record.description, record.postings);
-      // TODO: lock file
-      writeFile(this.filePath, this.transactionRecords.map(hledgerTransactionSerialize).join("\n\n"), (err) => {
-        if (err) {
-          // TODO: what to do here? retry
-          console.log(`Error writing file: ${err}`);
-        }
-      });
+      await writePath(this.filePath, hledgerTransactionsSerialize(this.transactionRecords));
+      // TODO: error handling?
 
       return record;
     } else {

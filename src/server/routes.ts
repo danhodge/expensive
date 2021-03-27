@@ -43,7 +43,7 @@ router.get("/transactions", async (req: Request, res: Response, next) => {
   }
 });
 
-router.put("/transactions/:id", (req: Request, res: Response) => {
+router.put("/transactions/:id", async (req: Request, res: Response) => {
   console.log(`Updating transaction: ${req.params.id} = ${JSON.stringify(req.body)}`);
   decodeObject(transactionDecoder, req.body).caseOf({
     Err: err => {
