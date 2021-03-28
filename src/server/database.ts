@@ -1,5 +1,4 @@
-import { existsSync, writeFile } from 'fs'
-import { readPath, writePath } from './files'
+import { Storage } from './storage';
 import { parse, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
 
@@ -13,8 +12,9 @@ export class Database {
   state: DatabaseState;
   transactionRecords: TransactionRecord[];
 
-  constructor(readonly filePath: string) {
-    if (existsSync(filePath)) {
+  constructor(readonly filePath: string, readonly storage: Storage) {
+    this.storage = storage;
+    if (this.storage.exists(filePath)) {
       this.filePath = filePath;
       this.state = DatabaseState.Initialized;
     } else {
@@ -28,7 +28,7 @@ export class Database {
     } else if (this.state == DatabaseState.Loaded) {
       return Promise.resolve(this.transactionRecords);
     } else {
-      let data = await readPath(this.filePath);
+      let data = await this.storage.readPath(this.filePath);
       console.log("Read file from disk");
       // TODO: store version
       this.transactionRecords = parse(data);
@@ -51,7 +51,7 @@ export class Database {
     let idx = this.transactionRecords.findIndex(element => element.id == id);
     if (idx != -1) {
       this.transactionRecords[idx] = new Transaction(id, record.date, record.description, record.postings);
-      await writePath(this.filePath, hledgerTransactionsSerialize(this.transactionRecords));
+      await this.storage.writePath(this.filePath, hledgerTransactionsSerialize(this.transactionRecords));
       // TODO: error handling?
 
       return record;

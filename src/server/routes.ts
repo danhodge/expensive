@@ -1,13 +1,12 @@
 import { Request, Response, Router } from 'express';
-import { readFileSync } from 'fs';
-import { parse, flatten } from './parser'
 import { transactionDecoder, serialize } from './transaction'
+import { FileStorage } from './storage'
 import { Database } from './database'
 import { decodeObject } from './json'
 
 const router = Router();
 
-const db = new Database('test.journal');
+const db = new Database('test.journal', new FileStorage());
 
 // TODO: for larger apps, define routes in separate files and register them here
 // import FooRoutes from "./foo"
