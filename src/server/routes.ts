@@ -42,15 +42,22 @@ router.get("/transactions", async (req: Request, res: Response, next) => {
   }
 });
 
-router.put("/transactions/:id", async (req: Request, res: Response) => {
+router.put("/transactions/:id", (req: Request, res: Response) => {
   console.log(`Updating transaction: ${req.params.id} = ${JSON.stringify(req.body)}`);
   decodeObject(transactionDecoder, req.body).caseOf({
     Err: err => {
       res.status(400).json({ status: `Error: ${err}` });
     },
-    Ok: txn => {
-      db.updateTransaction(req.params.id, txn);
-      res.json({ status: "OK", transaction: req.body });
+    Ok: async txn => {
+      let result = await db.updateTransaction(req.params.id, txn);
+      result.caseOf({
+        Err: updateErr => {
+          res.status(400).json({ status: `Error: ${updateErr}` });
+        },
+        Ok: txn => {
+          res.json({ status: "OK", transaction: txn });
+        }
+      });
     }
   });
 });

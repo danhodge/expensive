@@ -51,6 +51,7 @@
     "tailwindcss": "^2.0.2",
     "ts-jest": "^26.3.0",
     "ts-loader": "^8.0.13",
+    "ts-mockito": "^2.6.1",
     "ts-node": "^9.0.0",
     "tslint": "^6.1.2",
     "typescript": "^3.9.3",

@@ -1,3 +1,4 @@
+import { Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
 import { parse, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
@@ -47,17 +48,21 @@ export class Database {
     return [...new Set(flatCategories)].sort();
   }
 
-  async updateTransaction(id: string, record: TransactionRecord): Promise<TransactionRecord> {
-    let idx = this.transactionRecords.findIndex(element => element.id == id);
-    if (idx != -1) {
-      this.transactionRecords[idx] = new Transaction(id, record.date, record.description, record.postings);
-      await this.storage.writePath(this.filePath, hledgerTransactionsSerialize(this.transactionRecords));
-      // TODO: error handling?
+  async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
+    let txns = await this.transactions();
+    let idx = txns.findIndex(element => element.id == id);
 
-      return record;
+    if (idx != -1) {
+      try {
+        this.transactionRecords[idx] = new Transaction(id, record.date, record.description, record.postings);
+        await this.storage.writePath(this.filePath, hledgerTransactionsSerialize(this.transactionRecords));
+
+        return Ok(this.transactionRecords[idx]);
+      } catch {
+        return Err("Write Error");
+      }
     } else {
-      // TODO: what to do on error?
-      return null;
+      return Err("Record not found");
     }
   }
 }
