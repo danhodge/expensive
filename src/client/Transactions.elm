@@ -29,11 +29,27 @@ type alias Currency =
     String
 
 
-type alias Model =
-    { transactions : List Transaction
-    , categories : List Category
-    , status : Message
+type alias Database =
+    { name : String
+    , url : String
     }
+
+
+type alias DatabaseInfo =
+    { database : Database
+    , transactions : List Transaction
+    , categories : List Category
+    }
+
+
+type ApplicationData
+    = NotLoaded Message (List Database)
+    | Loading Message (List Database) Database
+    | Loaded Message (List Database) DatabaseInfo
+
+
+type alias Model =
+    ApplicationData
 
 
 type Message
@@ -80,18 +96,30 @@ type Transaction
 
 
 type alias Flags =
-    { categories : List Category
+    { databases : List Database
     }
 
 
 initialModel : Model
 initialModel =
-    { transactions = [], categories = [], status = NoMessage }
+    NotLoaded NoMessage []
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { initialModel | categories = flags.categories }, getTransactions )
+    let
+        newModel =
+            case initialModel of
+                NotLoaded msg dbs ->
+                    NotLoaded msg flags.databases
+
+                Loading msg dbs db ->
+                    Loading msg flags.databases db
+
+                Loaded msg dbs info ->
+                    Loaded msg flags.databases info
+    in
+    ( newModel, Cmd.none )
 
 
 
@@ -100,6 +128,7 @@ init flags =
 
 type Msg
     = Noop
+    | DatabaseSelected Database
     | NewTransactions (Result Http.Error (List Transaction))
     | Click String String
     | CancelEditor String
@@ -121,8 +150,11 @@ update message model =
         Noop ->
             ( model, Cmd.none )
 
+        DatabaseSelected db ->
+            ( toLoading model db, getTransactions db )
+
         NewTransactions (Ok newTransactions) ->
-            ( { model | transactions = newTransactions }, Cmd.none )
+            ( toLoaded model newTransactions, Cmd.none )
 
         NewTransactions (Err error) ->
             -- TODO: display an error
@@ -169,6 +201,35 @@ update message model =
         ChangesSaved id (Err error) ->
             -- TODO: display an error
             ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
+
+
+toLoading : Model -> Database -> Model
+toLoading model db =
+    case model of
+        -- TODO: are any of these transitions impossible?
+        NotLoaded msg dbs ->
+            Loading msg dbs db
+
+        Loading msg dbs _ ->
+            Loading msg dbs db
+
+        Loaded msg dbs _ ->
+            Loading msg dbs db
+
+
+toLoaded : Model -> List Transaction -> Model
+toLoaded model txns =
+    case model of
+        NotLoaded msg dbs ->
+            NotLoaded (Error "Cannot load transactions before selecting a database") dbs
+
+        Loading msg dbs db ->
+            -- TODO: need to populate categories
+            Loaded msg dbs { database = db, transactions = txns, categories = [] }
+
+        -- TODO: is this a page refresh?
+        Loaded msg dbs info ->
+            Loaded msg dbs info
 
 
 toggleEditable : Transaction -> Transaction
@@ -463,10 +524,10 @@ saveTransactionDecoder =
 -- COMMANDS
 
 
-getTransactions : Cmd Msg
-getTransactions =
+getTransactions : Database -> Cmd Msg
+getTransactions db =
     Http.get
-        { url = "http://localhost:3000/transactions"
+        { url = db.url
         , expect = Http.expectJson NewTransactions (Decode.list transactionDecoder)
         }
 
