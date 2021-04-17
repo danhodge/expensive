@@ -36,6 +36,11 @@ router.get("/transactions", async (req: Request, res: Response, next) => {
   // see: https://www.wisdomgeek.com/development/web-development/using-async-await-in-expressjs/
   try {
     let txns = await db.transactions();
+    // TODO: return more information
+    //  if successfully loaded -> list of transactions
+    //  if failed -> empty list + error message
+    //  return a different formatted body + status code depending on situation
+    //  use https://package.elm-lang.org/packages/elm/http/latest/Http#expectStringResponse to handle the differences
     res.json(txns.map(serialize));
   } catch (error) {
     next(error);

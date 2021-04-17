@@ -1,4 +1,5 @@
 import { Streams, N, C, F, SingleParser, TupleParser } from '@masala/parser';
+import { Result, Ok, Err } from 'seidr';
 import { Posting } from './posting';
 import { Transaction } from './transaction';
 
@@ -186,4 +187,22 @@ export function parse(input: string): TransactionRecord[] {
       }
     });
   }
+}
+
+// TODO: should this return a Result instead?
+export async function parse2(input: string): Promise<TransactionRecord[]> {
+  return new Promise<TransactionRecord[]>((resolve, reject) => {
+    let result = hledger().parse(Streams.ofString(input));
+    if (result.isAccepted()) {
+      resolve(filterMap(result.value.array(), record => {
+        if (keepRecord(record)) {
+          return record as TransactionRecord;
+        } else {
+          return null;
+        }
+      }));
+    } else {
+      reject("Parse Error");
+    }
+  });
 }

@@ -12,6 +12,8 @@ elm make src/Transactions.elm --output=public/js/transactions.js --debug
 
 ``` bash
 npm run test
+
+npm test <path_to_test_file>
 ```
 
 ## Server
