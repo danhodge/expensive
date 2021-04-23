@@ -26,7 +26,9 @@
   "homepage": "https://github.com/danhodge/expensive#readme",
   "dependencies": {
     "@masala/parser": "^1.0.0",
+    "@types/express-handlebars": "^3.1.0",
     "express": "^4.17.1",
+    "express-handlebars": "^5.3.0",
     "fs-ext": "^2.0.0",
     "fs.promises": "^0.1.2",
     "hbs": "^4.1.1",

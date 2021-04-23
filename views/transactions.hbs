@@ -1,9 +1,9 @@
 <div id="elm-app"></div>
 
 <script>
-  var _categories = [
-  {{#each categories}}
-    '{{this}}',
+  var _dbs = [
+  {{#each databases}}
+    {{toJSON this}},
   {{/each}}
   ];
 </script>
