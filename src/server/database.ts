@@ -49,21 +49,25 @@ export class Database {
   }
 
 
-  // async categoryNames(): Promise<string[]> {
-  //   let txns = await this.transactions();
-  //   let flatCategories: string[] = flatten(txns.map(txn => txn.postings.map(p => p.category)));
+  async categoryNames(): Promise<string[]> {
+    // let txns = await this.transactions();
+    // let flatCategories: string[] = flatten(txns.map(txn => txn.postings.map(p => p.category)));
 
-  //   return [...new Set(flatCategories)].sort();
-  // }
+    // return [...new Set(flatCategories)].sort();
 
-  // async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
-  //   // TODO: not working because FE is still expecting amountCents
-  //   return this.transactions()
-  //     .then(txns => this.findTransaction(txns, id))
-  //     .then(idx => this.updateTransactionByIndex(idx, record))
-  //     .then(txn => Ok(txn))
-  //     .catch(err => Err(err));
-  // }
+    return ["None"];
+  }
+
+  async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
+    // TODO: not working because FE is still expecting amountCents
+    // return this.transactions()
+    //   .then(txns => this.findTransaction(txns, id))
+    //   .then(idx => this.updateTransactionByIndex(idx, record))
+    //   .then(txn => Ok(txn))
+    //   .catch(err => Err(err));
+
+    return Ok(record);
+  }
 
   private async findTransaction(txns: TransactionRecord[], id: string): Promise<number> {
     let idx = txns.findIndex(element => element.id === id);

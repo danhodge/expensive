@@ -29,6 +29,12 @@ type alias Currency =
     String
 
 
+type alias ApplicationInfo =
+    { message : Message
+    , databases : List Database
+    }
+
+
 type alias Database =
     { name : String
     , url : String
@@ -43,9 +49,9 @@ type alias DatabaseInfo =
 
 
 type ApplicationData
-    = NotLoaded Message (List Database)
-    | Loading Message (List Database) Database
-    | Loaded Message (List Database) DatabaseInfo
+    = NotLoaded ApplicationInfo
+    | Loading Database ApplicationInfo
+    | Loaded DatabaseInfo ApplicationInfo
 
 
 type alias Model =
@@ -102,7 +108,7 @@ type alias Flags =
 
 initialModel : Model
 initialModel =
-    NotLoaded NoMessage []
+    NotLoaded { message = NoMessage, databases = [] }
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -110,14 +116,14 @@ init flags =
     let
         newModel =
             case initialModel of
-                NotLoaded msg dbs ->
-                    NotLoaded msg flags.databases
+                NotLoaded appInfo ->
+                    NotLoaded { appInfo | databases = flags.databases }
 
-                Loading msg dbs db ->
-                    Loading msg flags.databases db
+                Loading db appInfo ->
+                    Loading db { appInfo | databases = flags.databases }
 
-                Loaded msg dbs info ->
-                    Loaded msg flags.databases info
+                Loaded dbInfo appInfo ->
+                    Loaded dbInfo { appInfo | databases = flags.databases }
     in
     ( newModel, Cmd.none )
 
@@ -146,90 +152,98 @@ update message model =
         deactivatedTransaction txnId transactions =
             List.map (filteredIdentityMapper (andFn (matchTransactionId txnId) editableTransaction) restoreOriginalData) transactions
     in
-    case message of
-        Noop ->
+    case ( message, model ) of
+        ( Noop, _ ) ->
             ( model, Cmd.none )
 
-        DatabaseSelected db ->
+        -- TODO: what model?
+        ( DatabaseSelected db, _ ) ->
             ( toLoading model db, getTransactions db )
 
-        NewTransactions (Ok newTransactions) ->
+        -- TODO: what model?
+        ( NewTransactions (Ok newTransactions), _ ) ->
             ( toLoaded model newTransactions, Cmd.none )
 
-        NewTransactions (Err error) ->
+        -- TODO: what model?
+        ( NewTransactions (Err error), _ ) ->
             -- TODO: display an error
             ( model, Cmd.none )
 
-        Click txnId domId ->
-            ( { model | transactions = List.map (filteredIdentityMapper (matchTransactionId txnId) toggleEditable) model.transactions }
+        ( Click txnId domId, Loaded dbInfo appInfo ) ->
+            ( Loaded { dbInfo | transactions = List.map (filteredIdentityMapper (matchTransactionId txnId) toggleEditable) dbInfo.transactions } appInfo
             , Task.attempt (\_ -> Noop) (Browser.Dom.focus domId)
             )
 
-        CancelEditor id ->
+        ( CancelEditor id, Loaded dbInfo appInfo ) ->
             -- TODO: set focus to the amount of the last posting
-            ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
+            ( Loaded { dbInfo | transactions = deactivatedTransaction id dbInfo.transactions } appInfo, Cmd.none )
 
-        SetDescription id desc ->
+        ( SetDescription id desc, Loaded dbInfo appInfo ) ->
             -- TODO: why not just put the Transaction in message instead of the id?
-            ( { model | transactions = updateTransaction model.transactions id (updateTransactionDescription desc) }, Cmd.none )
+            ( Loaded { dbInfo | transactions = updateTransaction dbInfo.transactions id (updateTransactionDescription desc) } appInfo, Cmd.none )
 
-        SetPostingName id postIdx category ->
+        ( SetPostingName id postIdx category, Loaded dbInfo appInfo ) ->
             -- TODO: Detect when PostingName is set to an existing category by pressing Enter on auto-complete list and shift focus to the amount
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingCategory category >> justify) }, Cmd.none )
+            ( Loaded { dbInfo | transactions = updateTransactionAndPosting dbInfo.transactions id postIdx (updatePostingCategory category >> justify) } appInfo, Cmd.none )
 
-        SetPostingAmount id postIdx amount ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (updatePostingAmount amount >> justify) }, Cmd.none )
+        ( SetPostingAmount id postIdx amount, Loaded dbInfo appInfo ) ->
+            ( Loaded { dbInfo | transactions = updateTransactionAndPosting dbInfo.transactions id postIdx (updatePostingAmount amount >> justify) } appInfo, Cmd.none )
 
-        RemovePosting id postIdx ->
-            ( { model | transactions = updateTransactionAndPosting model.transactions id postIdx (\posting -> Nothing) }, Cmd.none )
+        ( RemovePosting id postIdx, Loaded dbInfo appInfo ) ->
+            ( Loaded { dbInfo | transactions = updateTransactionAndPosting dbInfo.transactions id postIdx (\posting -> Nothing) } appInfo, Cmd.none )
 
-        SaveChanges txn ->
+        ( SaveChanges txn, Loaded dbInfo appInfo ) ->
             case saveChanges txn of
                 Ok cmd ->
-                    ( { model | status = NoMessage }, cmd )
+                    ( Loaded dbInfo { appInfo | message = NoMessage }, cmd )
 
                 Err msg ->
-                    ( { model | status = Error msg }, Cmd.none )
+                    ( Loaded dbInfo { appInfo | message = Error msg }, Cmd.none )
 
-        ChangesSaved id (Ok updatedTxn) ->
+        ( ChangesSaved id (Ok updatedTxn), Loaded dbInfo appInfo ) ->
             let
                 nonEmptyCategory posting =
                     nonEmptyCategoryFilter posting.category
             in
-            ( { model | transactions = List.map (filteredIdentityMapper (matchTransactionId id) (\txn -> updatedTxn)) model.transactions, categories = insertCategory (List.filterMap nonEmptyCategory (toRecord updatedTxn).data.postings) model.categories }, Cmd.none )
+            ( Loaded { dbInfo | transactions = List.map (filteredIdentityMapper (matchTransactionId id) (\txn -> updatedTxn)) dbInfo.transactions, categories = insertCategory (List.filterMap nonEmptyCategory (toRecord updatedTxn).data.postings) dbInfo.categories } appInfo, Cmd.none )
 
-        ChangesSaved id (Err error) ->
+        ( ChangesSaved id (Err error), Loaded dbInfo appInfo ) ->
             -- TODO: display an error
-            ( { model | transactions = deactivatedTransaction id model.transactions }, Cmd.none )
+            ( Loaded { dbInfo | transactions = deactivatedTransaction id dbInfo.transactions } appInfo, Cmd.none )
+
+        ( _, _ ) ->
+            -- Disregard messages that arrived for the wrong state
+            ( model, Cmd.none )
 
 
 toLoading : Model -> Database -> Model
 toLoading model db =
     case model of
         -- TODO: are any of these transitions impossible?
-        NotLoaded msg dbs ->
-            Loading msg dbs db
+        -- TODD: add helper function for extracting appInfo
+        NotLoaded appInfo ->
+            Loading db appInfo
 
-        Loading msg dbs _ ->
-            Loading msg dbs db
+        Loading _ appInfo ->
+            Loading db appInfo
 
-        Loaded msg dbs _ ->
-            Loading msg dbs db
+        Loaded _ appInfo ->
+            Loading db appInfo
 
 
 toLoaded : Model -> List Transaction -> Model
 toLoaded model txns =
     case model of
-        NotLoaded msg dbs ->
-            NotLoaded (Error "Cannot load transactions before selecting a database") dbs
+        NotLoaded appInfo ->
+            NotLoaded { appInfo | message = Error "Cannot load transactions before selecting a database" }
 
-        Loading msg dbs db ->
+        Loading db appInfo ->
             -- TODO: need to populate categories
-            Loaded msg dbs { database = db, transactions = txns, categories = [] }
+            Loaded { database = db, transactions = txns, categories = [] } appInfo
 
         -- TODO: is this a page refresh?
-        Loaded msg dbs info ->
-            Loaded msg dbs info
+        Loaded dbInfo appInfo ->
+            Loaded { dbInfo | transactions = txns } appInfo
 
 
 toggleEditable : Transaction -> Transaction
@@ -567,17 +581,30 @@ saveChanges transaction =
 
 view : Model -> Html Msg
 view model =
+    case model of
+        NotLoaded appInfo ->
+            viewNotLoaded appInfo
+
+        Loading db appInfo ->
+            viewLoading db appInfo
+
+        Loaded dbInfo appInfo ->
+            viewLoaded dbInfo appInfo
+
+
+viewLoaded : DatabaseInfo -> ApplicationInfo -> Html Msg
+viewLoaded dbInfo appInfo =
     div [ class "mt-4" ]
         [ datalist [ id "categories-list" ]
             (List.map
                 (\name -> option [] [ text name ])
-                model.categories
+                dbInfo.categories
             )
         , div
             (classes
                 [ "w-2/3", "mx-auto" ]
             )
-            [ statusMessage model.status ]
+            [ statusMessage appInfo.message ]
         , table
             (classes [ "w-2/3", "mx-auto", "table-fixed" ])
             ([ tr [ class "text-left" ]
@@ -588,9 +615,23 @@ view model =
                 , th [ class "w-1/2" ] [ text "Postings" ]
                 ]
              ]
-                ++ transactionRows model.transactions
+                ++ transactionRows dbInfo.transactions
             )
         ]
+
+
+viewNotLoaded : ApplicationInfo -> Html Msg
+viewNotLoaded appInfo =
+    -- TODO: define not loaded view
+    div (classes [ "flex", "flex-col", "h-screen" ])
+        [ header (classes [ "py-5", "bg-gray-700", "text-white", "text-center" ]) [ text "Header" ] ]
+
+
+viewLoading : Database -> ApplicationInfo -> Html Msg
+viewLoading db appInfo =
+    -- TODO: define loading view
+    div (classes [ "flex", "flex-col", "h-screen" ])
+        [ header (classes [ "py-5", "bg-gray-700", "text-white", "text-center" ]) [ text "Header" ] ]
 
 
 classes : List String -> List (Attribute Msg)

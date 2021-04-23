@@ -14,8 +14,8 @@ const db = new Database('test.journal', new FileStorage());
 
 router.get("/", async (req: Request, res: Response, next) => {
   try {
-    let uniqCategories = await db.categoryNames();
-    res.render("transactions", { categories: uniqCategories });
+    //let uniqCategories = await db.categoryNames();
+    res.render("transactions", { databases: [{ name: "mydb", url: "http://www.db.com" }, { name: "otherdb", url: "http://other.db.com" }] });
   } catch (error) {
     next(error);
   }
@@ -41,7 +41,9 @@ router.get("/transactions", async (req: Request, res: Response, next) => {
     //  if failed -> empty list + error message
     //  return a different formatted body + status code depending on situation
     //  use https://package.elm-lang.org/packages/elm/http/latest/Http#expectStringResponse to handle the differences
-    res.json(txns.map(serialize));
+
+    //res.json(txns.map(serialize));
+    res.json([]);
   } catch (error) {
     next(error);
   }
