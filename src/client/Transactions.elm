@@ -8,7 +8,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
 import Http
-import Json.Decode as Decode exposing (Decoder, field, map2, map3, map4, map5)
+import Json.Decode as Decode exposing (Decoder, field, map, map2, map3, map4, map5)
 import Json.Encode as Encode exposing (..)
 import Money as Money exposing (..)
 import String
@@ -541,7 +541,7 @@ saveTransactionDecoder =
 getTransactions : Database -> Cmd Msg
 getTransactions db =
     Http.get
-        { url = db.url
+        { url = db.url ++ "/transactions"
         , expect = Http.expectJson NewTransactions (Decode.list transactionDecoder)
         }
 
@@ -623,8 +623,24 @@ viewLoaded dbInfo appInfo =
 viewNotLoaded : ApplicationInfo -> Html Msg
 viewNotLoaded appInfo =
     -- TODO: define not loaded view
+    -- TODO: default to a non-selected DB
+    let
+        toOption db =
+            option [ value db.url ] [ text db.name ]
+
+        tagger url =
+            case List.head (List.filter (\db -> db.url == url) appInfo.databases) of
+                Just db ->
+                    DatabaseSelected db
+
+                Nothing ->
+                    Noop
+    in
     div (classes [ "flex", "flex-col", "h-screen" ])
-        [ header (classes [ "py-5", "bg-gray-700", "text-white", "text-center" ]) [ text "Header" ] ]
+        [ header (classes [ "py-5", "bg-gray-700", "text-black", "text-center" ])
+            [ select [ on "change" (map tagger targetValue) ] ([ option [] [ text "Select Database" ] ] ++ List.map toOption appInfo.databases)
+            ]
+        ]
 
 
 viewLoading : Database -> ApplicationInfo -> Html Msg

@@ -15,7 +15,7 @@ const db = new Database('test.journal', new FileStorage());
 router.get("/", async (req: Request, res: Response, next) => {
   try {
     //let uniqCategories = await db.categoryNames();
-    res.render("transactions", { databases: [{ name: "mydb", url: "http://www.db.com" }, { name: "otherdb", url: "http://other.db.com" }] });
+    res.render("transactions", { databases: [{ name: "mydb", url: "http://localhost:3000/mydb" }, { name: "otherdb", url: "http://localhost:3000/otherdb" }] });
   } catch (error) {
     next(error);
   }
@@ -32,7 +32,7 @@ router.get("/", async (req: Request, res: Response, next) => {
 // 3. check to see if it matches expected version
 // 4. increment version and write updated file
 // 5. unlock file
-router.get("/transactions", async (req: Request, res: Response, next) => {
+router.get("/:dbId/transactions", async (req: Request, res: Response, next) => {
   // see: https://www.wisdomgeek.com/development/web-development/using-async-await-in-expressjs/
   try {
     let txns = await db.transactions();
@@ -49,8 +49,8 @@ router.get("/transactions", async (req: Request, res: Response, next) => {
   }
 });
 
-router.put("/transactions/:id", (req: Request, res: Response) => {
-  console.log(`Updating transaction: ${req.params.id} = ${JSON.stringify(req.body)}`);
+router.put("/:dbId/transactions/:id", (req: Request, res: Response) => {
+  console.log(`Updating ${req.params.dbId} transaction: ${req.params.id} = ${JSON.stringify(req.body)}`);
   decodeObject(transactionDecoder, req.body).caseOf({
     Err: err => {
       res.status(400).json({ status: `Error: ${err}` });
