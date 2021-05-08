@@ -1,6 +1,7 @@
 import { Dirent } from 'fs';
 import { open, readdir, stat, FileHandle } from 'fs/promises';
 import { flock } from 'fs-ext';
+import { join } from 'path';
 
 export interface Storage {
   scan(filter: (path: string) => boolean): Promise<string[]>;
@@ -15,9 +16,13 @@ type LockMode = "ex" | "sh" | "shnb" | "exnb" | "un";
  * Directory Structure
  * root/
  *     /dbId1/
- *           /dbName.journal
+ *           /db.journal
+ *           /meta.json
+ *           /data/
+ *                /timestamp1.csv
+ *                /timestamp2.csv
  *     /dbId2/
- *           /dbName.journal
+ *           /db.journal
  */
 export class FileStorage implements Storage {
   constructor(readonly rootPath: string) {
@@ -32,10 +37,13 @@ export class FileStorage implements Storage {
       return readdir(path, { withFileTypes: true })
         .then(async (results) => {
           for (const p of results) {
+            let fullPath = join(path, p.name);
+            let subPath = fullPath.substring(this.rootPath.length);
+
             if (p.isDirectory()) {
-              promises.push(scanDir(path + "/" + p.name));
-            } else if (filter(p.name)) {
-              matches.push(p.name);
+              promises.push(scanDir(fullPath));
+            } else if (filter(subPath)) {
+              matches.push(subPath);
             }
           }
 
