@@ -11,18 +11,31 @@ export enum DatabaseState {
   Error
 }
 
+export interface DatabaseConfig {
+  name: string,
+  journal: string,
+  dataDir: string
+}
+
 export class Database {
   state: DatabaseState;
   transactionRecords: TransactionRecord[];
 
-  constructor(readonly filePath: string, readonly storage: Storage) {
+  constructor(readonly config: DatabaseConfig, readonly storage: Storage) {
     this.storage = storage;
-    if (this.storage.exists(filePath)) {
-      this.filePath = filePath;
+    if (this.storage.exists(config.journal)) {
       this.state = DatabaseState.Initialized;
     } else {
       this.state = DatabaseState.Missing;
     }
+  }
+
+  // id(): string {
+  //   return this.config.id;
+  // }
+
+  name(): string {
+    return this.config.name;
   }
 
   async transactions(): Promise<Result<string, TransactionRecord[]>> {
@@ -42,7 +55,7 @@ export class Database {
     //   return Promise.resolve([]);
     // }
 
-    return this.storage.readPath(this.filePath)
+    return this.storage.readPath(this.config.journal)
       .then(data => parse2(data))
       .then(txns => Ok(txns))
       .catch(err => Err(err));
@@ -81,7 +94,7 @@ export class Database {
   private async updateTransactionByIndex(idx: number, record: TransactionRecord): Promise<TransactionRecord> {
     return new Promise<TransactionRecord>((resolve, reject) => {
       this.transactionRecords[idx] = new Transaction(record.id, record.date, record.description, record.postings);
-      this.storage.writePath(this.filePath, hledgerTransactionsSerialize(this.transactionRecords))
+      this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords))
         .then(() => resolve(this.transactionRecords[idx]))
         .catch(err => reject(err));
     });

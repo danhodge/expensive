@@ -23,9 +23,28 @@ type LockMode = "ex" | "sh" | "shnb" | "exnb" | "un";
  *                /timestamp2.csv
  *     /dbId2/
  *           /db.journal
+ *
+ * root/
+ *     /id1.expensive.json
+ *     /id2.expensive.json
+ *
+ * {
+ *   name: "",
+ *   journal: "/id.journal",
+ *   dataDir: "/data/id/"
+ * }
  */
 export class FileStorage implements Storage {
   constructor(readonly rootPath: string) {
+  }
+
+  async *scanz() {
+    let scanDir = async (path: string) => {
+    };
+
+    // yield new
+
+    // scanDir(this.rootPath, (path) => { yield path });
   }
 
   // recursion + promises based on: https://medium.com/@wrj111/recursive-promises-in-nodejs-769d0e4c0cf9
