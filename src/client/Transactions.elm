@@ -638,7 +638,7 @@ viewNotLoaded appInfo =
     in
     div (classes [ "flex", "flex-col", "h-screen" ])
         [ header (classes [ "py-5", "bg-gray-700", "text-black", "text-center" ])
-            [ select [ on "change" (map tagger targetValue) ] ([ option [] [ text "Select Database" ] ] ++ List.map toOption appInfo.databases)
+            [ select [ on "change" (Decode.map tagger targetValue) ] ([ option [] [ text "Select Database" ] ] ++ List.map toOption appInfo.databases)
             ]
         ]
 
