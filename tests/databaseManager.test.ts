@@ -14,6 +14,7 @@ test("loads the databases on demand", async () => {
 
   expect(result.done).toEqual(false);
   if (result.done === false) {
+    expect(result.value.id()).toEqual('1234');
     expect(result.value.name()).toEqual('test123');
   }
 });
@@ -35,3 +36,5 @@ test("it omits missing databases", async () => {
 
   expect(names).toEqual(['test456']);
 });
+
+// TODO: test that it handles a bad db config

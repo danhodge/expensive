@@ -12,10 +12,12 @@ export enum DatabaseState {
   Error
 }
 
-export interface DatabaseConfig {
-  name: string,
-  journal: string,
-  dataDir: string
+export class DatabaseConfig {
+  readonly id: string;
+
+  constructor(readonly name: string, readonly journal: string, readonly dataDir: string) {
+    this.id = journal.split('.')[0];
+  }
 }
 
 export class Database {
@@ -38,9 +40,9 @@ export class Database {
     return this.state === targetState;
   }
 
-  // id(): string {
-  //   return this.config.id;
-  // }
+  id(): string {
+    return this.config.id;
+  }
 
   name(): string {
     return this.config.name;
