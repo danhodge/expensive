@@ -4,6 +4,7 @@ import { parse, parse2, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
 
 export enum DatabaseState {
+  New,
   Initialized,
   Missing,
   Loaded,
@@ -23,11 +24,18 @@ export class Database {
 
   constructor(readonly config: DatabaseConfig, readonly storage: Storage) {
     this.storage = storage;
-    if (this.storage.exists(config.journal)) {
-      this.state = DatabaseState.Initialized;
-    } else {
-      this.state = DatabaseState.Missing;
+    this.state = DatabaseState.New;
+  }
+
+  // TODO: make this smarter so checkState(Initialized) returns true when state = Loaded
+  async checkState(targetState: DatabaseState): Promise<boolean> {
+    if (this.state == DatabaseState.New) {
+      this.state = await this.storage.exists(this.config.journal) ?
+        DatabaseState.Initialized :
+        DatabaseState.Missing;
     }
+
+    return this.state === targetState;
   }
 
   // id(): string {

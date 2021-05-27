@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises';
 import { Result, Ok, Err } from 'seidr';
-import { Database } from './database';
+import { Database, DatabaseState } from './database';
 import { Storage } from './storage';
 
 export class DatabaseManager {
@@ -35,7 +35,9 @@ export class DatabaseManager {
           .then(buffer => JSON.parse(buffer.toString()))
           .then(config => new Database(config, this.storage));
 
-      yield db;
+      if (await db.checkState(DatabaseState.Initialized)) {
+        yield db;
+      }
     }
   }
 }
