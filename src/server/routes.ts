@@ -6,7 +6,7 @@ import { decodeObject } from './json'
 
 const router = Router();
 
-const db = new Database('test.journal', new FileStorage());
+const db = new Database({ name: 'test', journal: 'test.journal', dataDir: 'data' }, new FileStorage('./'));
 
 // TODO: for larger apps, define routes in separate files and register them here
 // import FooRoutes from "./foo"
