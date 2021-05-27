@@ -37,4 +37,14 @@ test("it omits missing databases", async () => {
   expect(names).toEqual(['test456']);
 });
 
-// TODO: test that it handles a bad db config
+test("it omits database with bad config", async () => {
+  const mockStorage: Storage = mock();
+  const storage: Storage = instance(mockStorage);
+  when(mockStorage.scan(anyFunction())).thenResolve(['1234.expensive.json']);
+  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "name": "test123", "journal": "1234.journal", "data": 123 }));
+
+  const gen = new DatabaseManager(storage).databases();
+  const result = await gen.next();
+
+  expect(result.done).toEqual(true);
+});

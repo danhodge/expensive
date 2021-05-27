@@ -1,7 +1,8 @@
 import { readFile } from 'fs/promises';
 import { Result, Ok, Err } from 'seidr';
-import { Database, DatabaseConfig, DatabaseState } from './database';
+import { Database, DatabaseConfig, DatabaseState, dbConfigDecoder } from './database';
 import { Storage } from './storage';
+import { decodeString } from './json';
 
 export class DatabaseManager {
   constructor(readonly storage: Storage) {
@@ -29,14 +30,17 @@ export class DatabaseManager {
 
     // TODO: is there a way to do a for/in loop without indexing?
     for (const i in paths) {
-      const db =
+      const dbResult =
         await this.storage
           .readPath(paths[i])
-          .then(buffer => JSON.parse(buffer.toString()))
-          .then(json => new DatabaseConfig(json.name, json.journal, json.dataDir))
-          .then(config => new Database(config, this.storage));
+          .then(buffer => {
+            return decodeString(dbConfigDecoder, buffer.toString())
+              .map(config => new Database(config, this.storage));
+          });
 
-      if (await db.checkState(DatabaseState.Initialized)) {
+      // TODO: this is gross - should the promise chain just raise if the config is invalid?
+      let db = dbResult.getOrElse(null);
+      if (db !== null && await db.checkState(DatabaseState.Initialized)) {
         yield db;
       }
     }

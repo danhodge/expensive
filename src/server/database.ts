@@ -2,6 +2,7 @@ import { Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
 import { parse, parse2, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
+import { string, field, map3 } from "./json"
 
 export enum DatabaseState {
   New,
@@ -19,6 +20,15 @@ export class DatabaseConfig {
     this.id = journal.split('.')[0];
   }
 }
+
+const dbConfigDecoder = map3(
+  (name: string, journal: string, dataDir: string) => new DatabaseConfig(name, journal, dataDir),
+  field("name", string()),
+  field("journal", string()),
+  field("dataDir", string()),
+);
+
+export { dbConfigDecoder };
 
 export class Database {
   state: DatabaseState;
