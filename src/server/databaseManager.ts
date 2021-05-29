@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises';
-import { Result, Ok, Err } from 'seidr';
+import { Result, Ok, Err, Just, Nothing } from 'seidr';
 import { Database, DatabaseConfig, DatabaseState, dbConfigDecoder } from './database';
 import { Storage } from './storage';
 import { decodeString } from './json';
@@ -24,17 +24,26 @@ export class DatabaseManager {
   //     .catch((err) => Err(err));
   // }
 
+  // TODO: return type?
+  // TODO: this shouldn't be a generator
   async *databases() {
-    const pattern = new RegExp('^\/(?<id>.+)\.expensive\.json$');
-    const paths = await this.storage.scan(path => pattern.test(path));
+    const pattern = new RegExp('^(?<id>.+)\.expensive\.json$');
+    const scanner = (path: string) => {
+      const match = path.match(pattern);
+      if (match) {
+        return Just(match.groups.id);
+      } else {
+        return Nothing();
+      }
+    }
+    const pathsToIds = await this.storage.scan(scanner);
 
-    // TODO: is there a way to do a for/in loop without indexing?
-    for (const i in paths) {
+    for (const entry of pathsToIds.entries()) {
       const dbResult =
         await this.storage
-          .readPath(paths[i])
+          .readPath(entry[0])  // TODO: is there a way to destructure this?
           .then(buffer => {
-            return decodeString(dbConfigDecoder, buffer.toString())
+            return decodeString(dbConfigDecoder(entry[1]), buffer.toString())
               .map(config => new Database(config, this.storage));
           });
 
@@ -42,6 +51,14 @@ export class DatabaseManager {
       let db = dbResult.getOrElse(null);
       if (db !== null && await db.checkState(DatabaseState.Initialized)) {
         yield db;
+      }
+    }
+  }
+
+  async database(id: string): Promise<Database> {
+    for await (const db of this.databases()) {
+      if (db.id() === id) {
+        return db;
       }
     }
   }

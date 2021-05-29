@@ -48,3 +48,6 @@ test("it omits database with bad config", async () => {
 
   expect(result.done).toEqual(true);
 });
+
+
+// TODO: test with completely invalid config (non-JSON)

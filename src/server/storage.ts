@@ -1,10 +1,11 @@
 import { Dirent } from 'fs';
-import { open, readdir, stat, FileHandle } from 'fs/promises';
+import { open, readdir, realpath, stat, FileHandle } from 'fs/promises';
 import { flock } from 'fs-ext';
 import { join } from 'path';
+import { Maybe, Just, Nothing } from 'seidr';
 
 export interface Storage {
-  scan(filter: (path: string) => boolean): Promise<string[]>;
+  scan<T>(filter: (path: string) => Maybe<T>): Promise<Map<string, T>>;
   exists(path: string): Promise<boolean>;
   readPath(path: string): Promise<string>;
   writePath(path: string, data: string): Promise<void>;
@@ -35,49 +36,63 @@ type LockMode = "ex" | "sh" | "shnb" | "exnb" | "un";
  * }
  */
 export class FileStorage implements Storage {
-  constructor(readonly rootPath: string) {
-  }
+  _canonicalRootPath: string;
 
-  async *scanz() {
-    let scanDir = async (path: string) => {
-    };
-
-    // yield new
-
-    // scanDir(this.rootPath, (path) => { yield path });
-  }
+  constructor(readonly rootPath: string) { }
 
   // recursion + promises based on: https://medium.com/@wrj111/recursive-promises-in-nodejs-769d0e4c0cf9
-  async scan(filter: (path: string) => boolean): Promise<string[]> {
+  async scan<T>(filter: (path: string) => Maybe<T>): Promise<Map<string, T>> {
     let scanDir = async (path: string) => {
-      let matches = new Array<string>();
-      let promises = new Array<Promise<string[]>>();
+      let matches = new Map<string, T>();
+      let promises = new Array<Promise<Map<string, T>>>();
 
       return readdir(path, { withFileTypes: true })
         .then(async (results) => {
           for (const p of results) {
             let fullPath = join(path, p.name);
-            let subPath = fullPath.substring(this.rootPath.length);
+            let subPath = fullPath.substring(this._canonicalRootPath.length + 1);
 
             if (p.isDirectory()) {
               promises.push(scanDir(fullPath));
-            } else if (filter(subPath)) {
-              matches.push(subPath);
+            } else {
+              filter(subPath).caseOf({
+                Just: val => matches.set(subPath, val),
+                Nothing: () => matches
+              });
             }
           }
 
           return Promise.all(promises).then((values) => {
-            return ([] as string[]).concat(...values).concat(matches)
+            const reducer = (val: Map<string, T>, memo: Map<string, T>): Map<string, T> => {
+              // TODO: is there a better/immutable way to merge Maps
+              val.forEach((val, key) => memo.set(key, val));
+              return memo
+            }
+
+            return values.reduce(reducer, matches);
           });
         });
     }
 
-    return scanDir(this.rootPath);
+    return scanDir(await this.canonicalRootPath());
+  }
+
+  // TODO: is there an established pattern for this?
+  async canonicalRootPath(): Promise<string> {
+    if (this._canonicalRootPath) {
+      return Promise.resolve(this._canonicalRootPath);
+    } else {
+      return realpath(this.rootPath).then(path => {
+        this._canonicalRootPath = path;
+        return path;
+      });
+    }
   }
 
   async exists(path: string): Promise<boolean> {
     try {
-      await stat(path);
+      const fullPath = await this.toFullPath(path);
+      await stat(fullPath);
       return true;
     } catch {
       return false;
@@ -88,7 +103,8 @@ export class FileStorage implements Storage {
     let handle: FileHandle;
 
     try {
-      handle = await open(path, "r");
+      const fullPath = await this.toFullPath(path);
+      handle = await open(fullPath, "r");
       let buffer = await this.lockFile(handle, "ex", () => handle.readFile());
       return buffer.toString();
     } finally {
@@ -100,11 +116,16 @@ export class FileStorage implements Storage {
     let handle: FileHandle;
 
     try {
-      handle = await open(path, "w");
+      const fullPath = await this.toFullPath(path);
+      handle = await open(fullPath, "w");
       await this.lockFile(handle, "ex", () => handle.write(data));
     } finally {
       await handle?.close();
     }
+  }
+
+  async toFullPath(path: string): Promise<string> {
+    return join(await this.canonicalRootPath(), path);
   }
 
   async lockFile<T>(handle: FileHandle, mode: LockMode, handler: () => Promise<T>): Promise<T> {

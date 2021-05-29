@@ -1,12 +1,11 @@
 import { Request, Response, Router } from 'express';
 import { transactionDecoder, serialize } from './transaction'
 import { FileStorage } from './storage'
-import { Database } from './database'
+import { DatabaseManager } from './databaseManager'
 import { decodeObject } from './json'
 
 const router = Router();
-
-const db = new Database({ name: 'test', journal: 'test.journal', dataDir: 'data' }, new FileStorage('./'));
+const dbManager = new DatabaseManager(new FileStorage('./db'));
 
 // TODO: for larger apps, define routes in separate files and register them here
 // import FooRoutes from "./foo"
@@ -15,7 +14,12 @@ const db = new Database({ name: 'test', journal: 'test.journal', dataDir: 'data'
 router.get("/", async (req: Request, res: Response, next) => {
   try {
     //let uniqCategories = await db.categoryNames();
-    res.render("transactions", { databases: [{ name: "mydb", url: "http://localhost:3000/mydb" }, { name: "otherdb", url: "http://localhost:3000/otherdb" }] });
+    let dbs = [];
+    for await (const db of dbManager.databases()) {
+      dbs.push({ name: db.name(), url: db.url('http://localhost:3000') });
+    }
+
+    res.render("transactions", { databases: dbs });
   } catch (error) {
     next(error);
   }
@@ -35,15 +39,19 @@ router.get("/", async (req: Request, res: Response, next) => {
 router.get("/:dbId/transactions", async (req: Request, res: Response, next) => {
   // see: https://www.wisdomgeek.com/development/web-development/using-async-await-in-expressjs/
   try {
-    let txns = await db.transactions();
+    const db = await dbManager.database(req.params.dbId);
+    let txnResult = await db.transactions();
+    txnResult.caseOf({
+      Ok: txns => res.json(txns.map(serialize)),
+      Err: err => res.status(400).json({ status: `Error: ${err}`, state: db.state })
+    });
+
     // TODO: return more information
     //  if successfully loaded -> list of transactions
     //  if failed -> empty list + error message
     //  return a different formatted body + status code depending on situation
     //  use https://package.elm-lang.org/packages/elm/http/latest/Http#expectStringResponse to handle the differences
 
-    //res.json(txns.map(serialize));
-    res.json([]);
   } catch (error) {
     next(error);
   }
@@ -56,7 +64,7 @@ router.put("/:dbId/transactions/:id", (req: Request, res: Response) => {
       res.status(400).json({ status: `Error: ${err}` });
     },
     Ok: async txn => {
-      let result = await db.updateTransaction(req.params.id, txn);
+      let result = await dbManager.database(req.params.dbId).then(db => db.updateTransaction(req.params.id, txn));
       result.caseOf({
         Err: updateErr => {
           res.status(400).json({ status: `Error: ${updateErr}` });

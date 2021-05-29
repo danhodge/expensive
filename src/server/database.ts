@@ -2,7 +2,7 @@ import { Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
 import { parse, parse2, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
-import { string, field, map3 } from "./json"
+import { Decoder, string, field, map3 } from "./json"
 
 export enum DatabaseState {
   New,
@@ -14,21 +14,22 @@ export enum DatabaseState {
 }
 
 export class DatabaseConfig {
-  readonly id: string;
+  constructor(readonly id: string, readonly name: string, readonly journal: string, readonly dataDir: string) {
+  }
 
-  constructor(readonly name: string, readonly journal: string, readonly dataDir: string) {
-    this.id = journal.split('.')[0];
+  url(base: string): string {
+    return [base, this.id].join("/");
   }
 }
 
-const dbConfigDecoder = map3(
-  (name: string, journal: string, dataDir: string) => new DatabaseConfig(name, journal, dataDir),
-  field("name", string()),
-  field("journal", string()),
-  field("dataDir", string()),
-);
-
-export { dbConfigDecoder };
+export function dbConfigDecoder(dbId: string): Decoder<DatabaseConfig> {
+  return map3(
+    (name: string, journal: string, dataDir: string) => new DatabaseConfig(dbId.toString(), name, journal, dataDir),
+    field("name", string()),
+    field("journal", string()),
+    field("dataDir", string()),
+  );
+}
 
 export class Database {
   state: DatabaseState;
@@ -41,7 +42,7 @@ export class Database {
 
   // TODO: make this smarter so checkState(Initialized) returns true when state = Loaded
   async checkState(targetState: DatabaseState): Promise<boolean> {
-    if (this.state == DatabaseState.New) {
+    if (this.state === DatabaseState.New) {
       this.state = await this.storage.exists(this.config.journal) ?
         DatabaseState.Initialized :
         DatabaseState.Missing;
@@ -56,6 +57,10 @@ export class Database {
 
   name(): string {
     return this.config.name;
+  }
+
+  url(base: string): string {
+    return this.config.url(base);
   }
 
   async transactions(): Promise<Result<string, TransactionRecord[]>> {
@@ -77,8 +82,19 @@ export class Database {
 
     return this.storage.readPath(this.config.journal)
       .then(data => parse2(data))
-      .then(txns => Ok(txns))
-      .catch(err => Err(err));
+      .then(txns => {
+        this.state = DatabaseState.Loaded;
+        return Ok(txns);
+      })
+      .catch(err => {
+        if (err === "Parse Error") {
+          // TODO: better way to distinguish between errors
+          this.state = DatabaseState.Invalid;
+        } else {
+          this.state = DatabaseState.Error;
+        }
+        return Err(err);
+      });
   }
 
 
