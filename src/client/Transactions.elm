@@ -8,7 +8,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, on, onClick, onInput, targetValue)
 import Http
-import Json.Decode as Decode exposing (Decoder, field, map, map2, map3, map4, map5)
+import Json.Decode as Decode exposing (Decoder, field, map, map2, map3, map4)
 import Json.Encode as Encode exposing (..)
 import Money as Money exposing (..)
 import String
@@ -193,7 +193,7 @@ update message model =
             ( Loaded { dbInfo | transactions = updateTransactionAndPosting dbInfo.transactions id postIdx (\posting -> Nothing) } appInfo, Cmd.none )
 
         ( SaveChanges txn, Loaded dbInfo appInfo ) ->
-            case saveChanges txn of
+            case saveChanges txn dbInfo.database.url of
                 Ok cmd ->
                     ( Loaded dbInfo { appInfo | message = NoMessage }, cmd )
 
@@ -512,17 +512,16 @@ postingDecoder =
         (field "amountCents" Decode.int)
 
 
-decodedTransaction : String -> String -> Int -> Description -> List Posting -> Transaction
-decodedTransaction id date amountCents description postings =
-    SavedTransaction (TransactionRecord id date amountCents (TransactionData description postings))
+decodedTransaction : String -> String -> Description -> List Posting -> Transaction
+decodedTransaction id date description postings =
+    SavedTransaction (TransactionRecord id date 0 (TransactionData description postings))
 
 
 transactionDecoder : Decoder Transaction
 transactionDecoder =
-    map5 decodedTransaction
+    map4 decodedTransaction
         (field "id" Decode.string)
         (field "date" Decode.string)
-        (field "amountCents" Decode.int)
         (field "description" Decode.string)
         (field "postings" (Decode.list postingDecoder))
 
@@ -546,8 +545,8 @@ getTransactions db =
         }
 
 
-saveChanges : Transaction -> Result String (Cmd Msg)
-saveChanges transaction =
+saveChanges : Transaction -> String -> Result String (Cmd Msg)
+saveChanges transaction baseUrl =
     case transaction of
         SavedTransaction _ ->
             Ok Cmd.none
@@ -563,7 +562,7 @@ saveChanges transaction =
                         (Http.request
                             { method = "PUT"
                             , headers = []
-                            , url = Url.Builder.crossOrigin "http://localhost:3000" [ "transactions", record.id ] []
+                            , url = Url.Builder.crossOrigin baseUrl [ "transactions", record.id ] []
                             , body = Http.jsonBody value
                             , expect = Http.expectJson (ChangesSaved record.id) saveTransactionDecoder
                             , timeout = Nothing

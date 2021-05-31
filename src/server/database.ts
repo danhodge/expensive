@@ -64,37 +64,29 @@ export class Database {
   }
 
   async transactions(): Promise<Result<string, TransactionRecord[]>> {
-    // if (this.state === DatabaseState.Loaded) {
-    //   return Promise.resolve(this.transactionRecords);
-    // } else if (this.state === DatabaseState.Initialized) {
-    //   let data = await this.storage.readPath(this.filePath);
-    //   console.log("Read file from disk");
-    //   // TODO: store version
-    //   this.transactionRecords = parse(data);
-    //   console.log("Parsed transaction records");
-    //   // TODO: fail if transaction were not loaded successfully
-    //   this.state = DatabaseState.Loaded;
+    if (this.state === DatabaseState.Loaded) {
+      return Promise.resolve(Ok(this.transactionRecords));
+    } else if (this.state === DatabaseState.Initialized) {
+      return this.storage.readPath(this.config.journal)
+        .then(data => parse2(data))
+        .then(txns => {
+          this.transactionRecords = txns;
+          this.state = DatabaseState.Loaded;
 
-    //   return this.transactionRecords;
-    // } else {
-    //   return Promise.resolve([]);
-    // }
-
-    return this.storage.readPath(this.config.journal)
-      .then(data => parse2(data))
-      .then(txns => {
-        this.state = DatabaseState.Loaded;
-        return Ok(txns);
-      })
-      .catch(err => {
-        if (err === "Parse Error") {
-          // TODO: better way to distinguish between errors
-          this.state = DatabaseState.Invalid;
-        } else {
-          this.state = DatabaseState.Error;
-        }
-        return Err(err);
-      });
+          return Ok(txns);
+        })
+        .catch(err => {
+          if (err === "Parse Error") {
+            // TODO: better way to distinguish between errors
+            this.state = DatabaseState.Invalid;
+          } else {
+            this.state = DatabaseState.Error;
+          }
+          return Err(err);
+        });
+    } else {
+      return Promise.resolve(Err(`Failed to load transaction: ${this.state}`));
+    }
   }
 
 
@@ -108,18 +100,15 @@ export class Database {
   }
 
   async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
-    // TODO: not working because FE is still expecting amountCents
-    // return this.transactions()
-    //   .then(txns => this.findTransaction(txns, id))
-    //   .then(idx => this.updateTransactionByIndex(idx, record))
-    //   .then(txn => Ok(txn))
-    //   .catch(err => Err(err));
-
-    return Ok(record);
+    return this.transactions()
+      .then(txns => this.findTransaction(txns, id))
+      .then(idx => this.updateTransactionByIndex(idx, record))
+      .then(txn => Ok(txn))
+      .catch(err => Err(err));
   }
 
-  private async findTransaction(txns: TransactionRecord[], id: string): Promise<number> {
-    let idx = txns.findIndex(element => element.id === id);
+  private async findTransaction(result: Result<string, TransactionRecord[]>, id: string): Promise<number> {
+    let idx = result.getOrElse([]).findIndex(element => element.id === id);
     if (idx !== -1) {
       return Promise.resolve(idx);
     } else {
