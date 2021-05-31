@@ -17,8 +17,7 @@ export function serialize(record: TransactionRecord) {
     id: record.id,
     date: record.date.toDateString(),
     description: record.description,
-    postings: record.postings,
-    amountCents: 0
+    postings: record.postings
   }
 }
 

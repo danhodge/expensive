@@ -70,7 +70,7 @@ router.put("/:dbId/transactions/:id", (req: Request, res: Response) => {
           res.status(400).json({ status: `Error: ${updateErr}` });
         },
         Ok: txn => {
-          res.json({ status: "OK", transaction: txn });
+          res.json({ status: "OK", transaction: serialize(txn) });
         }
       });
     }
