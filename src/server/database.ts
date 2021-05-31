@@ -89,16 +89,6 @@ export class Database {
     }
   }
 
-
-  async categoryNames(): Promise<string[]> {
-    // let txns = await this.transactions();
-    // let flatCategories: string[] = flatten(txns.map(txn => txn.postings.map(p => p.category)));
-
-    // return [...new Set(flatCategories)].sort();
-
-    return ["None"];
-  }
-
   async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
     return this.transactions()
       .then(txns => this.findTransaction(txns, id))

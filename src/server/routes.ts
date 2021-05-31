@@ -13,7 +13,6 @@ const dbManager = new DatabaseManager(new FileStorage('./db'));
 
 router.get("/", async (req: Request, res: Response, next) => {
   try {
-    //let uniqCategories = await db.categoryNames();
     let dbs = [];
     for await (const db of dbManager.databases()) {
       dbs.push({ name: db.name(), url: db.url('http://localhost:3000') });

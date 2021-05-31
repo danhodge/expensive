@@ -239,11 +239,33 @@ toLoaded model txns =
 
         Loading db appInfo ->
             -- TODO: need to populate categories
-            Loaded { database = db, transactions = txns, categories = [] } appInfo
+            Loaded { database = db, transactions = txns, categories = extractCategories txns } appInfo
 
         -- TODO: is this a page refresh?
         Loaded dbInfo appInfo ->
             Loaded { dbInfo | transactions = txns } appInfo
+
+
+-- TODO: unique categories
+extractCategories : List Transaction -> List Category
+extractCategories txns =
+    let
+        filterCategory catg =
+            if emptyCategory catg then
+                Nothing
+            else
+                Just (fromCategorySetting catg)
+    in
+        List.sort (List.foldl (\txn catgs -> txn
+                              |> toRecord
+                              |> .data
+                              |> .postings
+                              |> List.map .category
+                              |> List.filterMap filterCategory
+                              |> List.append catgs
+                   )
+            []
+                txns)
 
 
 toggleEditable : Transaction -> Transaction
