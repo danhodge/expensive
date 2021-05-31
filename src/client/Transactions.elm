@@ -594,7 +594,8 @@ view model =
 
 viewLoaded : DatabaseInfo -> ApplicationInfo -> Html Msg
 viewLoaded dbInfo appInfo =
-    div [ class "mt-4" ]
+    viewTemplate (text dbInfo.database.name)
+    (div [ class "mt-4" ]
         [ datalist [ id "categories-list" ]
             (List.map
                 (\name -> option [] [ text name ])
@@ -617,7 +618,7 @@ viewLoaded dbInfo appInfo =
              ]
                 ++ transactionRows dbInfo.transactions
             )
-        ]
+        ])
 
 
 viewNotLoaded : ApplicationInfo -> Html Msg
@@ -636,23 +637,31 @@ viewNotLoaded appInfo =
                 Nothing ->
                     Noop
     in
-    div (classes [ "flex", "flex-col", "h-screen" ])
-        [ header (classes [ "py-5", "bg-gray-700", "text-black", "text-center" ])
-            [ select [ on "change" (Decode.map tagger targetValue) ] ([ option [] [ text "Select Database" ] ] ++ List.map toOption appInfo.databases)
-            ]
-        ]
+    viewTemplate (select [ class "text-black", on "change" (Decode.map tagger targetValue) ] ([ option [] [ text "Select Database" ] ] ++ List.map toOption appInfo.databases)) emptyDiv
 
 
 viewLoading : Database -> ApplicationInfo -> Html Msg
 viewLoading db appInfo =
     -- TODO: define loading view
-    div (classes [ "flex", "flex-col", "h-screen" ])
-        [ header (classes [ "py-5", "bg-gray-700", "text-white", "text-center" ]) [ text "Header" ] ]
+    viewTemplate (text "Header") emptyDiv
+
+
+viewTemplate : Html Msg -> Html Msg -> Html Msg
+viewTemplate headerRoot contentRoot =
+    div []
+        [div (classes [ "flex", "flex-col", "h-1/6" ])
+             [ header (classes [ "px-3", "py-3", "bg-gray-700", "text-white", "text-left" ]) [headerRoot] ],
+             contentRoot ]
 
 
 classes : List String -> List (Attribute Msg)
 classes names =
     List.map (\name -> class name) names
+
+
+emptyDiv : Html Msg
+emptyDiv =
+    div [] []
 
 
 statusMessage : Message -> Html Msg
