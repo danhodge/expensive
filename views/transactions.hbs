@@ -1,0 +1,11 @@
+<div id="elm-app"></div>
+
+<script>
+  var _dbs = [
+  {{#each databases}}
+    {{toJSON this}},
+  {{/each}}
+  ];
+</script>
+
+<script src="transactions.js"></script>

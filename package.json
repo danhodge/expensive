@@ -10,7 +10,9 @@
     "start": "node .",
     "orig_build": "postcss public/styles.css -o public/output.css",
     "test": "jest",
-    "coverage": "jest --coverage"
+    "coverage": "jest --coverage",
+    "build:wp": "webpack",
+    "start:wp": "webpack && node build/main.js"
   },
   "repository": {
     "type": "git",
@@ -24,25 +26,49 @@
   "homepage": "https://github.com/danhodge/expensive#readme",
   "dependencies": {
     "@masala/parser": "^1.0.0",
-    "autoprefixer": "^9.7.5",
+    "@types/express-handlebars": "^3.1.0",
+    "browserslist": "^4.16.6",
+    "elliptic": "^6.5.4",
     "express": "^4.17.1",
-    "postcss-cli": "^7.1.0",
+    "express-handlebars": "^5.3.0",
+    "fs-ext": "^2.0.0",
+    "fs.promises": "^0.1.2",
+    "hbs": "^4.1.1",
+    "hosted-git-info": "^2.8.9",
+    "ini": "^1.3.8",
+    "lodash": "^4.17.21",
+    "node-notifier": "^8.0.1",
     "seidr": "^1.8.0",
+    "ssri": "^6.0.2",
     "sums-up": "^2.2.0",
-    "tailwindcss": "^1.2.0",
-    "typescript-parsec": "^0.3.2"
+    "typescript-parsec": "^0.3.2",
+    "ws": "^7.4.6",
+    "y18n": "^4.0.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.6",
+    "@types/express": "^4.17.9",
+    "@types/fs-ext": "^2.0.0",
     "@types/jest": "^26.0.13",
     "@types/node": "^14.0.5",
+    "@types/supertest": "^2.0.11",
+    "autoprefixer": "^10.2.3",
+    "copy-webpack-plugin": "^7.0.0",
+    "css-loader": "^5.0.1",
+    "elm-webpack-loader": "^7.0.1",
     "jest": "^26.4.2",
     "memory-streams": "^0.1.3",
+    "mini-css-extract-plugin": "^1.3.4",
+    "postcss-cli": "^8.3.1",
+    "postcss-loader": "^4.2.0",
+    "supertest": "^6.1.3",
+    "tailwindcss": "^2.0.2",
     "ts-jest": "^26.3.0",
+    "ts-loader": "^8.0.13",
+    "ts-mockito": "^2.6.1",
     "ts-node": "^9.0.0",
     "tslint": "^6.1.2",
     "typescript": "^3.9.3",
-    "webpack": "^4.43.0",
-    "webpack-cli": "^3.3.11"
+    "webpack": "^5.12.1",
+    "webpack-cli": "^4.3.1"
   }
 }
