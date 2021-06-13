@@ -238,7 +238,6 @@ toLoaded model txns =
             NotLoaded { appInfo | message = Error "Cannot load transactions before selecting a database" }
 
         Loading db appInfo ->
-            -- TODO: need to populate categories
             Loaded { database = db, transactions = txns, categories = extractCategories txns } appInfo
 
         -- TODO: is this a page refresh?
@@ -246,26 +245,38 @@ toLoaded model txns =
             Loaded { dbInfo | transactions = txns } appInfo
 
 
--- TODO: unique categories
 extractCategories : List Transaction -> List Category
 extractCategories txns =
     let
         filterCategory catg =
             if emptyCategory catg then
                 Nothing
+
             else
                 Just (fromCategorySetting catg)
+
+        getCategories txn =
+            txn
+                |> toRecord
+                |> .data
+                |> .postings
+                |> List.map .category
+                |> List.filterMap filterCategory
+
+        allCategories =
+            txns
+                |> List.concatMap getCategories
+                |> List.sort
+
+        uniq elem list =
+            case List.member elem list of
+                True ->
+                    list
+
+                False ->
+                    elem :: list
     in
-        List.sort (List.foldl (\txn catgs -> txn
-                              |> toRecord
-                              |> .data
-                              |> .postings
-                              |> List.map .category
-                              |> List.filterMap filterCategory
-                              |> List.append catgs
-                   )
-            []
-                txns)
+    List.foldr uniq [] allCategories
 
 
 toggleEditable : Transaction -> Transaction
@@ -616,30 +627,31 @@ view model =
 viewLoaded : DatabaseInfo -> ApplicationInfo -> Html Msg
 viewLoaded dbInfo appInfo =
     viewTemplate (text dbInfo.database.name)
-    (div [ class "mt-4" ]
-        [ datalist [ id "categories-list" ]
-            (List.map
-                (\name -> option [] [ text name ])
-                dbInfo.categories
-            )
-        , div
-            (classes
-                [ "w-2/3", "mx-auto" ]
-            )
-            [ statusMessage appInfo.message ]
-        , table
-            (classes [ "w-2/3", "mx-auto", "table-fixed" ])
-            ([ tr [ class "text-left" ]
-                [ th [ class "w-1/6", class "p-2" ] [ text "Date" ]
-                , th [ class "w-1/4" ] [ text "Description" ]
-                , th [ class "w-1/6" ] [ text "Amount" ]
-                , th [ class "w-1/6" ] [ text "Status" ]
-                , th [ class "w-1/2" ] [ text "Postings" ]
-                ]
-             ]
-                ++ transactionRows dbInfo.transactions
-            )
-        ])
+        (div [ class "mt-4" ]
+            [ datalist [ id "categories-list" ]
+                (List.map
+                    (\name -> option [] [ text name ])
+                    dbInfo.categories
+                )
+            , div
+                (classes
+                    [ "w-2/3", "mx-auto" ]
+                )
+                [ statusMessage appInfo.message ]
+            , table
+                (classes [ "w-2/3", "mx-auto", "table-fixed" ])
+                ([ tr [ class "text-left" ]
+                    [ th [ class "w-1/6", class "p-2" ] [ text "Date" ]
+                    , th [ class "w-1/4" ] [ text "Description" ]
+                    , th [ class "w-1/6" ] [ text "Amount" ]
+                    , th [ class "w-1/6" ] [ text "Status" ]
+                    , th [ class "w-1/2" ] [ text "Postings" ]
+                    ]
+                 ]
+                    ++ transactionRows dbInfo.transactions
+                )
+            ]
+        )
 
 
 viewNotLoaded : ApplicationInfo -> Html Msg
@@ -670,9 +682,10 @@ viewLoading db appInfo =
 viewTemplate : Html Msg -> Html Msg -> Html Msg
 viewTemplate headerRoot contentRoot =
     div []
-        [div (classes [ "flex", "flex-col", "h-1/6" ])
-             [ header (classes [ "px-3", "py-3", "bg-gray-700", "text-white", "text-left" ]) [headerRoot] ],
-             contentRoot ]
+        [ div (classes [ "flex", "flex-col", "h-1/6" ])
+            [ header (classes [ "px-3", "py-3", "bg-gray-700", "text-white", "text-left" ]) [ headerRoot ] ]
+        , contentRoot
+        ]
 
 
 classes : List String -> List (Attribute Msg)
