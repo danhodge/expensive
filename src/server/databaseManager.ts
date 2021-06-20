@@ -30,7 +30,7 @@ export class DatabaseManager {
     const pattern = new RegExp('^(?<id>.+)\.expensive\.json$');
     const scanner = (path: string) => {
       const match = path.match(pattern);
-      if (match) {
+      if (match !== undefined && match !== null && match.groups !== undefined) {
         return Just(match.groups.id);
       } else {
         return Nothing();
@@ -61,5 +61,7 @@ export class DatabaseManager {
         return db;
       }
     }
+
+    return Promise.reject();
   }
 }

@@ -36,7 +36,7 @@ type LockMode = "ex" | "sh" | "shnb" | "exnb" | "un";
  * }
  */
 export class FileStorage implements Storage {
-  _canonicalRootPath: string;
+  _canonicalRootPath!: string;
 
   constructor(readonly rootPath: string) { }
 
@@ -100,12 +100,14 @@ export class FileStorage implements Storage {
   }
 
   async readPath(path: string): Promise<string> {
-    let handle: FileHandle;
+    let handle: FileHandle | undefined;
 
     try {
       const fullPath = await this.toFullPath(path);
-      handle = await open(fullPath, "r");
-      let buffer = await this.lockFile(handle, "ex", () => handle.readFile());
+      // see: https://stackoverflow.com/questions/57385552/object-is-possibly-undefined-in-typescript
+      const openHandle = await open(fullPath, "r");
+      handle = openHandle;
+      let buffer = await this.lockFile(openHandle, "ex", () => openHandle.readFile());
       return buffer.toString();
     } finally {
       handle?.close();
@@ -113,12 +115,13 @@ export class FileStorage implements Storage {
   }
 
   async writePath(path: string, data: string): Promise<void> {
-    let handle: FileHandle;
+    let handle: FileHandle | undefined;
 
     try {
       const fullPath = await this.toFullPath(path);
-      handle = await open(fullPath, "w");
-      await this.lockFile(handle, "ex", () => handle.write(data));
+      const openHandle = await open(fullPath, "w");
+      handle = openHandle;
+      await this.lockFile(openHandle, "ex", () => openHandle.write(data));
     } finally {
       await handle?.close();
     }
@@ -130,7 +133,7 @@ export class FileStorage implements Storage {
 
   async lockFile<T>(handle: FileHandle, mode: LockMode, handler: () => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
-      flock(handle.fd, mode, (err: Error) => {
+      flock(handle.fd, mode, (err: NodeJS.ErrnoException | null) => {
         if (err) {
           reject(err);
         }

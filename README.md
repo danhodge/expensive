@@ -14,6 +14,8 @@ elm make src/Transactions.elm --output=public/js/transactions.js --debug
 npm run test
 
 npm test <path_to_test_file>
+
+npx jest -i <path_to_test_file> -t <test_name>
 ```
 
 ## Server

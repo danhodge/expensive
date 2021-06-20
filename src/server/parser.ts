@@ -1,5 +1,5 @@
 import { Streams, N, C, F, SingleParser, TupleParser } from '@masala/parser';
-import { Result, Ok, Err } from 'seidr';
+import { Result, Maybe, Just, Nothing, Ok, Err } from 'seidr';
 import { Posting } from './posting';
 import { Transaction } from './transaction';
 
@@ -164,13 +164,13 @@ function indexMap<T, U>(arr: T[], fn: (val: T, index: number) => U): U[] {
   return results;
 }
 
-function filterMap<T, U>(arr: T[], fn: (val: T) => U): U[] {
+function filterMap<T, U>(arr: T[], fn: (val: T) => Maybe<U>): U[] {
   let results = new Array<U>();
   for (let i = 0; i < arr.length; i++) {
-    let result = fn(arr[i]);
-    if (result) {
-      results.push(result);
-    }
+    fn(arr[i]).caseOf({
+      Just: (val: U) => results.push(val),
+      Nothing: () => { }
+    });
   }
 
   return results;
@@ -194,12 +194,14 @@ export function parse(input: string): TransactionRecord[] {
   if (result.isAccepted()) {
     return filterMap(result.value.array(), record => {
       if (keepRecord(record)) {
-        return record as TransactionRecord;
+        return Just(record as TransactionRecord);
       } else {
-        return null;
+        return Nothing();
       }
     });
   }
+
+  return new Array<TransactionRecord>();
 }
 
 // TODO: should this return a Result instead?
@@ -209,9 +211,9 @@ export async function parse2(input: string): Promise<TransactionRecord[]> {
     if (result.isAccepted()) {
       resolve(filterMap(result.value.array(), record => {
         if (keepRecord(record)) {
-          return record as TransactionRecord;
+          return Just(record as TransactionRecord);
         } else {
-          return null;
+          return Nothing();
         }
       }));
     } else {

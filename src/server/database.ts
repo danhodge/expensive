@@ -1,6 +1,6 @@
 import { Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
-import { parse, parse2, flatten, TransactionRecord } from './parser'
+import { parse2, flatten, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
 import { Decoder, string, field, map3 } from "./json"
 
@@ -33,7 +33,7 @@ export function dbConfigDecoder(dbId: string): Decoder<DatabaseConfig> {
 
 export class Database {
   state: DatabaseState;
-  transactionRecords: TransactionRecord[];
+  transactionRecords!: TransactionRecord[];
 
   constructor(readonly config: DatabaseConfig, readonly storage: Storage) {
     this.storage = storage;

@@ -174,8 +174,8 @@ function isBlankLine(line: string): Maybe<Line> {
 }
 
 function isCommentLine(line: string): Maybe<Line> {
-  let result = line.match(/^\s*;(?<comment>.*)/);
-  if (result) {
+  let result = /^\s*;(?<comment>.*)/.exec(line);
+  if (result && result.groups) {
     let { groups: { comment } } = result;
     return Just(new Line("Comment", comment));
   } else {
@@ -185,7 +185,7 @@ function isCommentLine(line: string): Maybe<Line> {
 
 function isDescriptionLine(line: string): Maybe<Line> {
   let result = line.match(/^(?<date>\d{4}-\d{2}-\d{2})\s{1,}(?<desc>\w.*)\s{2,}.*/)
-  if (result) {
+  if (result && result.groups) {
     let { groups: { date, desc } } = result
     let d: Description = { date: date, desc: desc };
     return Just(new Line("Description", d));
@@ -196,7 +196,7 @@ function isDescriptionLine(line: string): Maybe<Line> {
 
 function isPostingLine(line: string): Maybe<Line> {
   let result = line.match(/^\s{4,}(?<category>\w.*\w)\s{2,}\$(?<amount>-?\d+\.\d+)/)
-  if (result) {
+  if (result && result.groups) {
     let { groups: { category, amount } } = result
     let p: Posting = { category: category, amountCents: parseFloat(amount) * 100 };
     return Just(new Line("Posting", p));
