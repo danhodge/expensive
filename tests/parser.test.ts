@@ -1,6 +1,6 @@
 import { Streams } from '@masala/parser';
 import { readFileSync } from 'fs';
-import { parse, date, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitespace1, posting, record, hledger, blankLine, postingDescription, amount } from '../src/parser'
+import { parse, date, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitespace1, posting, record, hledger, blankLine, postingDescription, amount } from '../src/server/parser'
 
 test("date", () => {
   let r = date().parse(Streams.ofString("2020-11-13"));
@@ -34,7 +34,7 @@ test("nonNewlineWhitespace1 no whitespace characters", () => {
 test("posting", () => {
   let r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23  ; id:123\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, id: "123" });
+  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, index: "123" });
 });
 
 test("blankLine", () => {
@@ -62,8 +62,8 @@ test("record", () => {
     date: new Date(Date.parse("2020-11-17")),
     description: "Some store",
     postings: [
-      { category: "expenses:food:groceries", amountCents: -123, id: "123" },
-      { category: "assets:cash", amountCents: 123, id: "456" }
+      { category: "expenses:food:groceries", amountCents: -123, index: 0 },
+      { category: "assets:cash", amountCents: 123, index: 1 }
     ]
   });
 })
@@ -110,7 +110,7 @@ test("posting", () => {
   let data = "    expenses:unclassified                 $900.00\n";
   let r = posting().parse(Streams.ofString(data));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value).toEqual({ category: "expenses:unclassified", amountCents: 90000, id: null });
+  expect(r.value).toEqual({ category: "expenses:unclassified", amountCents: 90000, index: null });
 })
 
 test("comment, blank & record", () => {
