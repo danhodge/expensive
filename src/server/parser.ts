@@ -14,10 +14,22 @@ interface CommentLine extends Record {
 }
 
 export interface TransactionRecord extends Record {
-  id?: string
+  id: string
   date: Date
   description: string
   postings: Posting[]
+}
+
+class IdGenerator {
+  nextId: number;
+  constructor() {
+    this.nextId = 0;
+  }
+
+  id(): string {
+    this.nextId++;
+    return this.nextId.toString();
+  }
 }
 
 function keepRecord(record: Record): boolean {
@@ -89,7 +101,7 @@ export function posting(): SingleParser<Posting> {
     .then(amount())
     .then(nonNewlineWhitespace().drop().then(comment().opt()))
     .then(C.char("\n").drop())
-    .map(tuple => new Posting(tuple.at(2).map(extractId).orElse(null), tuple.at(0), tuple.at(1)));
+    .map(tuple => new Posting(tuple.at(2).map((str: string) => str).orElse(null), tuple.at(0), tuple.at(1)));
 }
 
 function recordDesc(): SingleParser<[Date, string, string?]> {
@@ -101,16 +113,16 @@ function recordDesc(): SingleParser<[Date, string, string?]> {
     .map(tuple => [tuple.at(0), tuple.at(1), tuple.at(2)]);
 }
 
-function extractId(tagsStr: string): string {
+function extractId(idGen: IdGenerator, tagsStr: string): string {
   let idTag = tagsStr.split(",").find(v => v.includes("id:"));
   if (idTag) {
     return idTag.split(":")[1].trim();
   } else {
-    return null;
+    return idGen.id();
   }
 }
 
-export function record(): SingleParser<TransactionRecord> {
+export function record(idGen: IdGenerator = new IdGenerator()): SingleParser<TransactionRecord> {
   return recordDesc()
     .then(posting().rep())
     .then(F.try(blankLine()).or(F.eos()).drop())
@@ -119,7 +131,7 @@ export function record(): SingleParser<TransactionRecord> {
         return new Posting(idx, posting.category, posting.amountCents)
       });
 
-      return new Transaction(tuple.at(0)[2].map(extractId).orElse(null), tuple.at(0)[0] as Date, tuple.at(0)[1], postings);
+      return new Transaction(tuple.at(0)[2].map((str: string) => extractId(idGen, str)).orElse(idGen.id()), tuple.at(0)[0] as Date, tuple.at(0)[1], postings);
     });
 }
 
@@ -168,12 +180,13 @@ export function flatten<T>(arr: any): T[] {
   return ([] as T[]).concat(...arr);
 }
 
-function recordBlankLineOrCommentLine(): SingleParser<Record> {
-  return F.try(record()).or(F.try(blankLine()).or(commentAndNewline()));
+function recordBlankLineOrCommentLine(idGen: IdGenerator = new IdGenerator()): SingleParser<Record> {
+  return F.try(record(idGen)).or(F.try(blankLine()).or(commentAndNewline()));
 }
 
 export function hledger(): TupleParser<Record> {
-  return recordBlankLineOrCommentLine().optrep().then(F.eos());
+  const idGen = new IdGenerator();
+  return recordBlankLineOrCommentLine(idGen).optrep().then(F.eos());
 }
 
 export function parse(input: string): TransactionRecord[] {

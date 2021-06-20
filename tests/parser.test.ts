@@ -34,7 +34,8 @@ test("nonNewlineWhitespace1 no whitespace characters", () => {
 test("posting", () => {
   let r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23  ; id:123\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, index: "123" });
+  // TODO: stop passing the comment into the Posting as the index
+  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, index: "id:123" });
 });
 
 test("blankLine", () => {
@@ -58,7 +59,7 @@ test("record", () => {
   let r = record().parse(Streams.ofString("2020-11-17 Some store\n    expenses:food:groceries     $-1.23 ; id:123\n    assets:cash        $1.23 ; id:456\n"));
   expect(r.isAccepted()).toEqual(true);
   expect(r.value).toEqual({
-    id: null,
+    id: "1",
     date: new Date(Date.parse("2020-11-17")),
     description: "Some store",
     postings: [
@@ -74,10 +75,16 @@ test("recordWithComment", () => {
   expect(r.value.id).toEqual("123")
 })
 
-test("recordWithNonIdComment", () => {
+test("recordWithNoIdComment", () => {
   let r = record().parse(Streams.ofString("2020-11-17 Some store  ; seqno:1 \n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value.id).toEqual(null)
+  expect(r.value.id).toEqual("1");
+})
+
+test("recordWithIdAndNonIdComments", () => {
+  let r = record().parse(Streams.ofString("2020-11-17 Some store  ; seqno:1, id:123, other:note \n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
+  expect(r.isAccepted()).toEqual(true);
+  expect(r.value.id).toEqual("123");
 })
 
 test("blanks", () => {
