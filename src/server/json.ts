@@ -23,11 +23,11 @@
 import { Result, Ok, Err } from 'seidr';
 
 export interface Decoder<T> {
-  (obj: any): Result<string, T>
+  (obj: unknown): Result<string, T>
 }
 
 export function string(): Decoder<string> {
-  return ((obj: any) => {
+  return ((obj: unknown) => {
     // TODO: is this the right way to check for a string
     if (typeof (obj) === 'string') {
       return Ok(obj as string)
@@ -38,7 +38,7 @@ export function string(): Decoder<string> {
 }
 
 export function int(): Decoder<number> {
-  return ((obj: any) => {
+  return ((obj: unknown) => {
     // TODO: is this the right way to check if something is a number
     if (typeof (obj) === 'number') {
       return Ok(obj as number);
@@ -50,11 +50,11 @@ export function int(): Decoder<number> {
 
 // TODO: function for combining decoders?
 export function date(): Decoder<Date> {
-  return ((obj: any) => {
+  return ((obj: unknown) => {
     return string()(obj).caseOf({
       Err: err => Err(err),
       Ok: str => {
-        let secs = Date.parse(str);
+        const secs = Date.parse(str);
         if (isNaN(secs)) {
           return Err(`Invalid date: ${str}`);
         } else {
@@ -65,20 +65,32 @@ export function date(): Decoder<Date> {
   });
 }
 
+
+// A custom type guard function that narrows the given value into a value
+// that exposes a string property named propertyName of unknown type
+// TODO: does this return type make sense? if so, why?
+function hasProperty(propertyName: string, value: unknown): value is { [key: string]: unknown } {
+  return (value && value instanceof Object && propertyName in value);
+}
+
 export function field<T>(name: string, decoder: Decoder<T>): Decoder<T> {
-  return ((obj: any) => {
-    return decoder(obj[name]).caseOf({
-      Err: err => Err(`Error decoding field: '${name}' = ${err}`),
-      Ok: val => Ok(val)
-    });
+  return ((obj: unknown) => {
+    if (hasProperty(name, obj)) {
+      return decoder(obj[name]).caseOf({
+        Err: err => Err(`Error decoding field: '${name}' = ${err}`),
+        Ok: val => Ok(val)
+      });
+    } else {
+      return Err(`Object has no property: '${name}`);
+    }
   });
 }
 
 export function map<A, T>(fn: (a: A) => T, decoderA: Decoder<A>): Decoder<T> {
-  return ((obj: any) => decoderA(obj).map(fn));
+  return ((obj: unknown) => decoderA(obj).map(fn));
 }
 
-export function decode<T, V>(obj: any, decoder: Decoder<T>, next: (t: T) => Result<string, V>): Result<string, V> {
+export function decode<T, V>(obj: unknown, decoder: Decoder<T>, next: (t: T) => Result<string, V>): Result<string, V> {
   return decoder(obj).caseOf({
     Err: err => Err(err),
     Ok: val => next(val)
@@ -86,7 +98,7 @@ export function decode<T, V>(obj: any, decoder: Decoder<T>, next: (t: T) => Resu
 }
 
 export function map2<A, B, T>(fn: (a: A, b: B) => T, decoderA: Decoder<A>, decoderB: Decoder<B>): Decoder<T> {
-  return ((obj: any) => {
+  return ((obj: unknown) => {
     return decode(
       obj,
       decoderA,
@@ -96,7 +108,7 @@ export function map2<A, B, T>(fn: (a: A, b: B) => T, decoderA: Decoder<A>, decod
 }
 
 export function map3<A, B, C, T>(fn: (a: A, b: B, c: C) => T, decoderA: Decoder<A>, decoderB: Decoder<B>, decoderC: Decoder<C>): Decoder<T> {
-  return ((obj: any) => {
+  return ((obj: unknown) => {
     return decode(obj, decoderA, (a: A) => {
       return decode(obj, decoderB, (b: B) => {
         return decode(obj, decoderC, (c: C) => Ok(fn(a, b, c)));
@@ -106,7 +118,7 @@ export function map3<A, B, C, T>(fn: (a: A, b: B, c: C) => T, decoderA: Decoder<
 }
 
 export function map4<A, B, C, D, T>(fn: (a: A, b: B, c: C, d: D) => T, decoderA: Decoder<A>, decoderB: Decoder<B>, decoderC: Decoder<C>, decoderD: Decoder<D>): Decoder<T> {
-  return ((obj: any) => {
+  return ((obj: unknown) => {
     return decode(obj, decoderA, (a: A) => {
       return decode(obj, decoderB, (b: B) => {
         return decode(obj, decoderC, (c: C) => {
@@ -118,23 +130,26 @@ export function map4<A, B, C, D, T>(fn: (a: A, b: B, c: C, d: D) => T, decoderA:
 }
 
 export function array<T>(decoder: Decoder<T>): Decoder<T[]> {
-  // TODO: what if obj is not an array?
-  return ((obj: any) => {
-    return obj.reduce((memo: Result<string, T[]>, cur: any) => {
-      return memo.caseOf({
-        Err: _ => memo,
-        Ok: (arr: T[]) => {
-          return decoder(cur).caseOf({
-            Err: err => Err(err),
-            Ok: (val: T) => {
-              // TODO: this should not mutate arr
-              arr.push(val);
-              return Ok(arr);
-            }
-          });
-        }
-      });
-    }, Ok(new Array<T>()));
+  return ((obj: unknown) => {
+    if (Array.isArray(obj)) {
+      return obj.reduce((memo: Result<string, T[]>, cur: unknown) => {
+        return memo.caseOf({
+          Err: () => memo,
+          Ok: (arr: T[]) => {
+            return decoder(cur).caseOf({
+              Err: err => Err(err),
+              Ok: (val: T) => {
+                // TODO: this should not mutate arr
+                arr.push(val);
+                return Ok(arr);
+              }
+            });
+          }
+        });
+      }, Ok(new Array<T>()));
+    } else {
+      return Err(`${obj} is not an Array`);
+    }
   });
 }
 
@@ -142,6 +157,6 @@ export function decodeString<T>(decoder: Decoder<T>, data: string): Result<strin
   return decodeObject(decoder, JSON.parse(data));
 }
 
-export function decodeObject<T>(decoder: Decoder<T>, obj: any): Result<string, T> {
+export function decodeObject<T>(decoder: Decoder<T>, obj: unknown): Result<string, T> {
   return decoder(obj);
 }

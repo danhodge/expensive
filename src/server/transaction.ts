@@ -12,7 +12,7 @@ const transactionDecoder = map4(
 
 export { transactionDecoder };
 
-export function serialize(record: TransactionRecord) {
+export function serialize(record: TransactionRecord): { id: string, date: string, description: string, postings: Array<Posting> } {
   return {
     id: record.id,
     date: record.date.toDateString(),
@@ -23,15 +23,15 @@ export function serialize(record: TransactionRecord) {
 
 export function hledgedPostingSerialize(maxCategoryLen: number): (p: Posting) => string {
   return (posting: Posting) => {
-    let padAmt = maxCategoryLen + 20 - posting.category.length;
-    let paddedAmt = `$${posting.amount()}`.padStart(padAmt, ' ');
+    const padAmt = maxCategoryLen + 20 - posting.category.length;
+    const paddedAmt = `$${posting.amount()}`.padStart(padAmt, ' ');
 
     return `    ${posting.category}${paddedAmt}`
   };
 }
 
 export function hledgerTransactionSerialize(record: Transaction): string {
-  let maxCategoryLen = Math.max(...record.postings.map(p => p.category.length));
+  const maxCategoryLen = Math.max(...record.postings.map(p => p.category.length));
   return [
     `${record.date.toISOString().substring(0, 10)} ${record.description}  ; id:${record.id}`
   ].concat(record.postings.map(hledgedPostingSerialize(maxCategoryLen))).join("\n")
@@ -43,10 +43,4 @@ export function hledgerTransactionsSerialize(records: TransactionRecord[]): stri
 
 export class Transaction implements TransactionRecord {
   constructor(readonly id: string, readonly date: Date, readonly description: string, readonly postings: Posting[]) { }
-
-  // https://www.typescriptlang.org/docs/handbook/advanced-types.html
-  static fromJSON(json: any): Transaction {
-    let date = new Date(Date.parse(json.date));
-    return new Transaction(json.id, date, json.description, json.postings);
-  }
 }

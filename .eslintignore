@@ -1,0 +1,10 @@
+# don't ever lint node_modules
+node_modules
+elm_stuff
+
+# don't lint build output (make sure it's set to your correct build folder name)
+build
+dist
+
+# don't lint nyc coverage output
+coverage

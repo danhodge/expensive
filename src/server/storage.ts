@@ -1,8 +1,7 @@
-import { Dirent } from 'fs';
 import { open, readdir, realpath, stat, FileHandle } from 'fs/promises';
 import { flock } from 'fs-ext';
 import { join } from 'path';
-import { Maybe, Just, Nothing } from 'seidr';
+import { Maybe } from 'seidr';
 
 export interface Storage {
   scan<T>(filter: (path: string) => Maybe<T>): Promise<Map<string, T>>;
@@ -42,15 +41,15 @@ export class FileStorage implements Storage {
 
   // recursion + promises based on: https://medium.com/@wrj111/recursive-promises-in-nodejs-769d0e4c0cf9
   async scan<T>(filter: (path: string) => Maybe<T>): Promise<Map<string, T>> {
-    let scanDir = async (path: string) => {
-      let matches = new Map<string, T>();
-      let promises = new Array<Promise<Map<string, T>>>();
+    const scanDir = async (path: string) => {
+      const matches = new Map<string, T>();
+      const promises = new Array<Promise<Map<string, T>>>();
 
       return readdir(path, { withFileTypes: true })
         .then(async (results) => {
           for (const p of results) {
-            let fullPath = join(path, p.name);
-            let subPath = fullPath.substring(this._canonicalRootPath.length + 1);
+            const fullPath = join(path, p.name);
+            const subPath = fullPath.substring(this._canonicalRootPath.length + 1);
 
             if (p.isDirectory()) {
               promises.push(scanDir(fullPath));
@@ -107,7 +106,7 @@ export class FileStorage implements Storage {
       // see: https://stackoverflow.com/questions/57385552/object-is-possibly-undefined-in-typescript
       const openHandle = await open(fullPath, "r");
       handle = openHandle;
-      let buffer = await this.lockFile(openHandle, "ex", () => openHandle.readFile());
+      const buffer = await this.lockFile(openHandle, "ex", () => openHandle.readFile());
       return buffer.toString();
     } finally {
       handle?.close();

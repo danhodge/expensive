@@ -1,6 +1,5 @@
-import { readFile } from 'fs/promises';
-import { Result, Ok, Err, Just, Nothing } from 'seidr';
-import { Database, DatabaseConfig, DatabaseState, dbConfigDecoder } from './database';
+import { Just, Nothing } from 'seidr';
+import { Database, DatabaseState, dbConfigDecoder } from './database';
 import { Storage } from './storage';
 import { decodeString } from './json';
 
@@ -24,10 +23,8 @@ export class DatabaseManager {
   //     .catch((err) => Err(err));
   // }
 
-  // TODO: return type?
-  // TODO: this shouldn't be a generator
-  async *databases() {
-    const pattern = new RegExp('^(?<id>.+)\.expensive\.json$');
+  async databases(): Promise<Array<Database>> {
+    const pattern = /^(?<id>.+)\.expensive\.json$/;
     const scanner = (path: string) => {
       const match = path.match(pattern);
       if (match !== undefined && match !== null && match.groups !== undefined) {
@@ -37,6 +34,7 @@ export class DatabaseManager {
       }
     }
     const pathsToIds = await this.storage.scan(scanner);
+    const dbs = new Array<Database>();
 
     for (const entry of pathsToIds.entries()) {
       const dbResult =
@@ -47,21 +45,27 @@ export class DatabaseManager {
               .map(config => new Database(config, this.storage));
           });
 
-      // TODO: this is gross - should the promise chain just raise if the config is invalid?
-      let db = dbResult.getOrElse(null);
-      if (db !== null && await db.checkState(DatabaseState.Initialized)) {
-        yield db;
+      if (dbResult.map(db => db.checkState(DatabaseState.Initialized))) {
+        const db = dbResult.getOrElse(null);
+
+        // TODO: is there a way to unwrap the Result without having to do a null check?
+        if (db !== undefined && db !== null) {
+          dbs.push(db);
+        }
       }
     }
+
+    return Promise.resolve(dbs);
   }
 
   async database(id: string): Promise<Database> {
-    for await (const db of this.databases()) {
-      if (db.id() === id) {
+    return this.databases().then(dbs => {
+      const db = dbs.find(db => db.id() === id);
+      if (db !== undefined) {
         return db;
+      } else {
+        return Promise.reject(`No database found for with ${id}`);
       }
-    }
-
-    return Promise.reject();
+    });
   }
 }

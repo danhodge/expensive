@@ -13,10 +13,9 @@ const dbManager = new DatabaseManager(new FileStorage('./db'));
 
 router.get("/", async (req: Request, res: Response, next) => {
   try {
-    let dbs = [];
-    for await (const db of dbManager.databases()) {
-      dbs.push({ name: db.name(), url: db.url('http://localhost:3000') });
-    }
+    const dbs =
+      (await dbManager.databases())
+        .map(db => { return { name: db.name(), url: db.url('http://localhost:3000') } });
 
     res.render("transactions", { databases: dbs });
   } catch (error) {
@@ -39,7 +38,8 @@ router.get("/:dbId/transactions", async (req: Request, res: Response, next) => {
   // see: https://www.wisdomgeek.com/development/web-development/using-async-await-in-expressjs/
   try {
     const db = await dbManager.database(req.params.dbId);
-    let txnResult = await db.transactions();
+    const txnResult = await db.transactions();
+
     txnResult.caseOf({
       Ok: txns => res.json(txns.map(serialize)),
       Err: err => res.status(400).json({ status: `Error: ${err}`, state: db.state })
@@ -63,7 +63,7 @@ router.put("/:dbId/transactions/:id", (req: Request, res: Response) => {
       res.status(400).json({ status: `Error: ${err}` });
     },
     Ok: async txn => {
-      let result = await dbManager.database(req.params.dbId).then(db => db.updateTransaction(req.params.id, txn));
+      const result = await dbManager.database(req.params.dbId).then(db => db.updateTransaction(req.params.id, txn));
       result.caseOf({
         Err: updateErr => {
           res.status(400).json({ status: `Error: ${updateErr}` });

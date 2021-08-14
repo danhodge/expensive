@@ -2,7 +2,7 @@ import { Token, tokenType, tokenize, Description, Posting, decodeLine } from '..
 import * as memoryStreams from 'memory-streams'
 
 function nextToken(tokenIter: Generator<Token>): Token {
-  let cur: IteratorResult<Token> = tokenIter.next();
+  const cur: IteratorResult<Token> = tokenIter.next();
   if (!cur.done) {
     return cur.value;
   } else {
@@ -22,7 +22,7 @@ function matches(token: Token, fn: (typeName: tokenType, arg?: string | number) 
 
 function isA(thing: tokenType): (typeName: string) => boolean {
   return (typeName: string) => {
-    let result = typeName === thing;
+    const result = typeName === thing;
 
     return result;
   }
@@ -37,7 +37,7 @@ function isSpaces(value: number): (typeName: tokenType, count: number) => boolea
 }
 
 test("tokenize", () => {
-  let tokenIter = tokenize(new memoryStreams.ReadableStream("\n\n; 1  2    ABC\n ; 4 5  6 ;\n"));
+  const tokenIter = tokenize(new memoryStreams.ReadableStream("\n\n; 1  2    ABC\n ; 4 5  6 ;\n"));
 
   expect(matches(nextToken(tokenIter), isA("Newline"))).toEqual(true);
   expect(matches(nextToken(tokenIter), isA("Newline"))).toEqual(true);
@@ -79,7 +79,7 @@ test("tokenize", () => {
 // });
 
 test("isCommentLine", () => {
-  let line = "  ;FIXME fix me";
+  const line = "  ;FIXME fix me";
 
   decodeLine(line).caseOf({
     Comment: (comment: string) => {
@@ -90,7 +90,7 @@ test("isCommentLine", () => {
 });
 
 test("isCommentLine", () => {
-  let line = ";  TODO: fix me ";
+  const line = ";  TODO: fix me ";
 
   decodeLine(line).caseOf({
     Comment: (comment: string) => {
@@ -101,7 +101,7 @@ test("isCommentLine", () => {
 });
 
 test("isDescriptionLine", () => {
-  let line = "2020-10-20  Food and Stuff  ; tag=value";
+  const line = "2020-10-20  Food and Stuff  ; tag=value";
 
   decodeLine(line).caseOf({
     Description: (d: Description) => {
@@ -113,7 +113,7 @@ test("isDescriptionLine", () => {
 });
 
 test("isBlankLine", () => {
-  let line = "   \n"
+  const line = "   \n"
 
   decodeLine(line).caseOf({
     Blank: () => true,
@@ -122,7 +122,7 @@ test("isBlankLine", () => {
 });
 
 test("isPostingLine", () => {
-  let line = "    expenses:unclassified                 $-900.00";
+  const line = "    expenses:unclassified                 $-900.00";
 
   decodeLine(line).caseOf({
     Posting: (p: Posting) => {

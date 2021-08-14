@@ -1,6 +1,6 @@
 import { Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
-import { parse2, flatten, TransactionRecord } from './parser'
+import { parse2, TransactionRecord } from './parser'
 import { Transaction, hledgerTransactionsSerialize } from './transaction'
 import { Decoder, string, field, map3 } from "./json"
 
@@ -98,7 +98,7 @@ export class Database {
   }
 
   private async findTransaction(result: Result<string, TransactionRecord[]>, id: string): Promise<number> {
-    let idx = result.getOrElse([]).findIndex(element => element.id === id);
+    const idx = result.getOrElse([]).findIndex(element => element.id === id);
     if (idx !== -1) {
       return Promise.resolve(idx);
     } else {

@@ -1,7 +1,6 @@
 import { Readable } from "stream";
 import { SumType } from "sums-up";
 import { Maybe, Just, Nothing } from "seidr";
-import { Transaction } from "./transaction";
 
 export type tokenType = "Newline" | "Comment" | "SingleSpace" | "MultiSpace" | "Text";
 
@@ -11,10 +10,10 @@ export class Token extends SumType<{
   SingleSpace: [],
   MultiSpace: [number],
   Text: [string]
-}> { };
+}> { }
 
 export function* eachLine(stream: Readable): Generator<string> {
-  let streamIter = nextChar(stream);
+  const streamIter = nextChar(stream);
   let curTxt = "";
   let cur = streamIter.next();
 
@@ -64,7 +63,7 @@ export class Line extends SumType<{
   Description: [Description], // [date, string]
   Posting: [Posting],         // [string, number]
   Invalid: [string]
-}> { };
+}> { }
 
 // export function parse1(lineIter: Generator<Line>, handler: Handler): Array<Transaction> {
 //   let curLine = lineIter.next();
@@ -85,7 +84,7 @@ export class Line extends SumType<{
 //   }
 // }
 
-export function* parse2(lineIter: Generator<String>, handler: Handler): Generator<Line> {
+export function* parse2(lineIter: Generator<string>): Generator<Line> {
   let state = State.Init;
   let curLine = lineIter.next();
 
@@ -93,14 +92,14 @@ export function* parse2(lineIter: Generator<String>, handler: Handler): Generato
     curLine = lineIter.next();
 
     state = decodeLine(curLine.value).caseOf({
-      Description: (desc: Description) => {
+      Description: () => {
         if (state === State.Init) {
           return State.Description;
         } else {
           return State.Invalid;
         }
       },
-      Posting: (post: Posting) => {
+      Posting: () => {
         if (state === State.Description || state === State.Postings) {
           return State.Postings;
         } else {
@@ -129,7 +128,7 @@ export function* parse2(lineIter: Generator<String>, handler: Handler): Generato
 export function* eachTransaction(lineIter: Generator<string>): Generator<Array<string>> {
   let curLine = lineIter.next();
   let state = State.Init;
-  let curTxn = new Array<string>();
+  const curTxn = new Array<string>();
 
   while (!curLine.done) {
     curLine = lineIter.next();
@@ -174,9 +173,9 @@ function isBlankLine(line: string): Maybe<Line> {
 }
 
 function isCommentLine(line: string): Maybe<Line> {
-  let result = /^\s*;(?<comment>.*)/.exec(line);
+  const result = /^\s*;(?<comment>.*)/.exec(line);
   if (result && result.groups) {
-    let { groups: { comment } } = result;
+    const { groups: { comment } } = result;
     return Just(new Line("Comment", comment));
   } else {
     return Nothing();
@@ -184,10 +183,10 @@ function isCommentLine(line: string): Maybe<Line> {
 }
 
 function isDescriptionLine(line: string): Maybe<Line> {
-  let result = line.match(/^(?<date>\d{4}-\d{2}-\d{2})\s{1,}(?<desc>\w.*)\s{2,}.*/)
+  const result = line.match(/^(?<date>\d{4}-\d{2}-\d{2})\s{1,}(?<desc>\w.*)\s{2,}.*/)
   if (result && result.groups) {
-    let { groups: { date, desc } } = result
-    let d: Description = { date: date, desc: desc };
+    const { groups: { date, desc } } = result
+    const d: Description = { date: date, desc: desc };
     return Just(new Line("Description", d));
   } else {
     return Nothing();
@@ -195,10 +194,10 @@ function isDescriptionLine(line: string): Maybe<Line> {
 }
 
 function isPostingLine(line: string): Maybe<Line> {
-  let result = line.match(/^\s{4,}(?<category>\w.*\w)\s{2,}\$(?<amount>-?\d+\.\d+)/)
+  const result = line.match(/^\s{4,}(?<category>\w.*\w)\s{2,}\$(?<amount>-?\d+\.\d+)/)
   if (result && result.groups) {
-    let { groups: { category, amount } } = result
-    let p: Posting = { category: category, amountCents: parseFloat(amount) * 100 };
+    const { groups: { category, amount } } = result
+    const p: Posting = { category: category, amountCents: parseFloat(amount) * 100 };
     return Just(new Line("Posting", p));
   } else {
     return Nothing();
@@ -223,14 +222,14 @@ export class ParserState extends SumType<{
   Postings: [Description, Array<Posting>],
   Complete: [Description, Array<Posting>],
   ParseError: [string]
-}> { };
+}> { }
 
-interface Handler {
-  start(date: string, desc: string, comment?: string): void
-  posting(category: string, amount: string, comment?: string): void
-  finish(): void
-  done(): Array<Transaction>
-}
+// interface Handler {
+//   start(date: string, desc: string, comment?: string): void
+//   posting(category: string, amount: string, comment?: string): void
+//   finish(): void
+//   done(): Array<Transaction>
+// }
 
 // export function parse(lineIter: Generator<String>, handler: Handler): Array<Transaction> {
 //   let state = new ParserState("Init");
@@ -294,7 +293,7 @@ interface Handler {
 
 
 export function* tokenize(stream: Readable): Generator<Token> {
-  let streamIter = nextChar(stream);
+  const streamIter = nextChar(stream);
   let curCh = null;
   let nextCh = null;
   let inSpace = false;
@@ -311,7 +310,7 @@ export function* tokenize(stream: Readable): Generator<Token> {
 
     if ((curCh === "\n" || curCh === " " || curCh === ";") && curTxt.length > 0) {
       // console.log(`yielding text = ${curTxt}`);
-      let value = curTxt;
+      const value = curTxt;
       curTxt = "";
       yield new Token("Text", value);
     }
@@ -321,7 +320,7 @@ export function* tokenize(stream: Readable): Generator<Token> {
     } else if (curCh === ";") {
       yield new Token("Comment");
     } else if (inSpace && nextCh !== " ") {
-      let token = new Token("MultiSpace", spacesCt + 1);
+      const token = new Token("MultiSpace", spacesCt + 1);
       inSpace = false;
       spacesCt = 0;
       yield token;
@@ -355,7 +354,7 @@ export function* tokenize(stream: Readable): Generator<Token> {
 function* nextChar(stream: Readable): Generator<string> {
   let buf: Buffer;
   while ((buf = stream.read()) !== null) {
-    for (let ch of buf.toString()) {
+    for (const ch of buf.toString()) {
       yield ch;
     }
   }

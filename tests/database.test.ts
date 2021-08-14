@@ -1,21 +1,20 @@
 import { readFileSync } from 'fs';
-import { mock, instance, when, anyString } from 'ts-mockito';
+import { mock, instance, when } from 'ts-mockito';
 import { Storage } from '../src/server/storage';
 import { Database, DatabaseConfig, DatabaseState } from '../src/server/database';
-import { Transaction } from '../src/server/transaction';
 
 test("successfully loads transactions from storage", async () => {
-  let path = "file.journal";
-  let config = new DatabaseConfig("123", "test", path, "dataDir");
-  let data = readFileSync("tests/fixtures/single_transaction.journal");
+  const path = "file.journal";
+  const config = new DatabaseConfig("123", "test", path, "dataDir");
+  const data = readFileSync("tests/fixtures/single_transaction.journal");
   const mockStorage: Storage = mock();
-  let storage: Storage = instance(mockStorage);
+  const storage: Storage = instance(mockStorage);
   when(mockStorage.exists(path)).thenResolve(true);
   when(mockStorage.readPath(path)).thenResolve(data.toString());
 
-  let db = new Database(config, storage);
+  const db = new Database(config, storage);
   (await db.transactions()).caseOf({
-    Err: _ => {
+    Err: () => {
       fail("Expected success");
     },
     Ok: txns => {
@@ -26,40 +25,40 @@ test("successfully loads transactions from storage", async () => {
 });
 
 test("fails to load transactions from storage", async () => {
-  let path = "file.journal";
-  let config = new DatabaseConfig("123", "test", path, "dataDir");
+  const path = "file.journal";
+  const config = new DatabaseConfig("123", "test", path, "dataDir");
   const mockStorage: Storage = mock();
-  let storage: Storage = instance(mockStorage);
+  const storage: Storage = instance(mockStorage);
   when(mockStorage.exists(path)).thenResolve(true);
   when(mockStorage.readPath(path)).thenReject(new Error("Problem"));
 
-  let db = new Database(config, storage);
+  const db = new Database(config, storage);
   (await db.transactions()).caseOf({
     Err: err => {
       expect(err.toString()).toEqual("Error: Problem");
       expect(db.state).toEqual(DatabaseState.Error);
     },
-    Ok: _ => {
+    Ok: () => {
       fail("Expected failure");
     }
   });
 });
 
 test("fails to parse transactions from storage", async () => {
-  let path = "file.journal";
-  let config = new DatabaseConfig("123", "test", path, "dataDir");
+  const path = "file.journal";
+  const config = new DatabaseConfig("123", "test", path, "dataDir");
   const mockStorage: Storage = mock();
-  let storage: Storage = instance(mockStorage);
+  const storage: Storage = instance(mockStorage);
   when(mockStorage.exists(path)).thenResolve(true);
   when(mockStorage.readPath(path)).thenResolve("INVALID DATA");
 
-  let db = new Database(config, storage);
+  const db = new Database(config, storage);
   (await db.transactions()).caseOf({
     Err: err => {
       expect(err.toString()).toEqual("Parse Error");
       expect(db.state).toEqual(DatabaseState.Invalid);
     },
-    Ok: _ => {
+    Ok: () => {
       fail("Expected failure");
     }
   });

@@ -1,24 +1,22 @@
 import { Streams, N, C, F, SingleParser, TupleParser } from '@masala/parser';
-import { Result, Maybe, Just, Nothing, Ok, Err } from 'seidr';
+import { Maybe, Just, Nothing } from 'seidr';
 import { Posting } from './posting';
 import { Transaction } from './transaction';
 
-interface Record {
-}
+type BlankLine = unknown;
 
-interface BlankLine extends Record {
-}
-
-interface CommentLine extends Record {
+interface CommentLine {
   text: string
 }
 
-export interface TransactionRecord extends Record {
+export interface TransactionRecord {
   id: string
   date: Date
   description: string
   postings: Posting[]
 }
+
+type Record = BlankLine | CommentLine | TransactionRecord;
 
 class IdGenerator {
   nextId: number;
@@ -59,7 +57,7 @@ export function date(): SingleParser<Date> {
     .then(C.char('-').drop())
     .then(N.integer())
     .map(tuple => {
-      let date = new Date(tuple.at(0), tuple.at(1) - 1, tuple.at(2));
+      const date = new Date(tuple.at(0), tuple.at(1) - 1, tuple.at(2));
       date.setUTCHours(0);
       date.setUTCMinutes(0);
       date.setUTCSeconds(0);
@@ -89,7 +87,7 @@ export function amount(): SingleParser<number> {
     .then(C.char('.').drop())
     .then(N.integer())
     .map(tuple => {
-      let cents = tuple.at(1) * 100 + tuple.at(2);
+      const cents = tuple.at(1) * 100 + tuple.at(2);
       return tuple.at(0).map(() => cents * -1).orElse(cents);
     });
 }
@@ -114,7 +112,7 @@ function recordDesc(): SingleParser<[Date, string, string?]> {
 }
 
 function extractId(idGen: IdGenerator, tagsStr: string): string {
-  let idTag = tagsStr.split(",").find(v => v.includes("id:"));
+  const idTag = tagsStr.split(",").find(v => v.includes("id:"));
   if (idTag) {
     return idTag.split(":")[1].trim();
   } else {
@@ -127,7 +125,7 @@ export function record(idGen: IdGenerator = new IdGenerator()): SingleParser<Tra
     .then(posting().rep())
     .then(F.try(blankLine()).or(F.eos()).drop())
     .map(tuple => {
-      let postings = indexMap(drop(tuple.array(), 1), (posting, idx) => {
+      const postings = indexMap(drop(tuple.array(), 1), (posting, idx) => {
         return new Posting(idx, posting.category, posting.amountCents)
       });
 
@@ -146,7 +144,7 @@ export function commentAndNewline(): SingleParser<CommentLine> {
 }
 
 function drop<T>(arr: T[], count: number): T[] {
-  let result = new Array<T>();
+  const result = new Array<T>();
   let i = count;
   for (; i < arr.length; i++) {
     result.push(arr[i]);
@@ -156,7 +154,7 @@ function drop<T>(arr: T[], count: number): T[] {
 }
 
 function indexMap<T, U>(arr: T[], fn: (val: T, index: number) => U): U[] {
-  let results = new Array<U>();
+  const results = new Array<U>();
   for (let i = 0; i < arr.length; i++) {
     results.push(fn(arr[i], i));
   }
@@ -165,19 +163,15 @@ function indexMap<T, U>(arr: T[], fn: (val: T, index: number) => U): U[] {
 }
 
 function filterMap<T, U>(arr: T[], fn: (val: T) => Maybe<U>): U[] {
-  let results = new Array<U>();
+  const results = new Array<U>();
   for (let i = 0; i < arr.length; i++) {
     fn(arr[i]).caseOf({
       Just: (val: U) => results.push(val),
-      Nothing: () => { }
+      Nothing: () => { /* no-op */ }
     });
   }
 
   return results;
-}
-
-export function flatten<T>(arr: any): T[] {
-  return ([] as T[]).concat(...arr);
 }
 
 function recordBlankLineOrCommentLine(idGen: IdGenerator = new IdGenerator()): SingleParser<Record> {
@@ -190,7 +184,7 @@ export function hledger(): TupleParser<Record> {
 }
 
 export function parse(input: string): TransactionRecord[] {
-  let result = hledger().parse(Streams.ofString(input));
+  const result = hledger().parse(Streams.ofString(input));
   if (result.isAccepted()) {
     return filterMap(result.value.array(), record => {
       if (keepRecord(record)) {
@@ -207,7 +201,7 @@ export function parse(input: string): TransactionRecord[] {
 // TODO: should this return a Result instead?
 export async function parse2(input: string): Promise<TransactionRecord[]> {
   return new Promise<TransactionRecord[]>((resolve, reject) => {
-    let result = hledger().parse(Streams.ofString(input));
+    const result = hledger().parse(Streams.ofString(input));
     if (result.isAccepted()) {
       resolve(filterMap(result.value.array(), record => {
         if (keepRecord(record)) {

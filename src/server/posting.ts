@@ -12,8 +12,8 @@ export class Posting {
   constructor(readonly index: number, readonly category: string, readonly amountCents: number) { }
 
   amount(): string {
-    let dollars = Math.trunc(this.amountCents / 100);
-    let cents = Math.abs(this.amountCents % 100).toString().padStart(2, "0");
+    const dollars = Math.trunc(this.amountCents / 100);
+    const cents = Math.abs(this.amountCents % 100).toString().padStart(2, "0");
 
     return `${dollars}.${cents}`
   }
