@@ -45,11 +45,11 @@ export class DatabaseManager {
               .map(config => new Database(config, this.storage));
           });
 
-      if (dbResult.map(db => db.checkState(DatabaseState.Initialized))) {
-        const db = dbResult.getOrElse(null);
-
-        // TODO: is there a way to unwrap the Result without having to do a null check?
-        if (db !== undefined && db !== null) {
+      // TODO: can this be tacked onto the map above?
+      const db = dbResult.getOrElse(null);
+      if (db !== undefined && db !== null) {
+        if (await db.checkState(DatabaseState.Initialized)) {
+          console.log(`done checking state`);
           dbs.push(db);
         }
       }

@@ -85,7 +85,7 @@ export class Database {
           return Err(err);
         });
     } else {
-      return Promise.resolve(Err(`Failed to load transaction: ${this.state}`));
+      return Promise.resolve(Err(`Failed to load transactions: ${this.state}`));
     }
   }
 
