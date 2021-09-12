@@ -3,13 +3,10 @@ import { transactionDecoder, serialize } from './transaction'
 import { FileStorage } from './storage'
 import { DatabaseManager } from './databaseManager'
 import { decodeObject } from './json'
+import { router as apiRoutes } from './apiRoutes'
 
 const router = Router();
 const dbManager = new DatabaseManager(new FileStorage('./db'));
-
-// TODO: for larger apps, define routes in separate files and register them here
-// import FooRoutes from "./foo"
-// router.use("foo", FooRoutes)
 
 router.get("/", async (req: Request, res: Response, next) => {
   try {
@@ -75,5 +72,7 @@ router.put("/:dbId/transactions/:id", (req: Request, res: Response) => {
     }
   });
 });
+
+router.use("/api", apiRoutes);
 
 export default router;
