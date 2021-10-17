@@ -1,8 +1,11 @@
-import { Result, Ok, Err } from 'seidr';
+import { Maybe, Just, Nothing, Result, Ok, Err } from 'seidr';
+import { default as parse } from 'csv-parse';
 import { Storage } from './storage';
-import { parse2, TransactionRecord } from './parser'
-import { Transaction, hledgerTransactionsSerialize } from './transaction'
-import { Decoder, string, field, map3 } from "./json"
+import { parse2, TransactionRecord } from './parser';
+import { Transaction, hledgerTransactionsSerialize } from './transaction';
+import { Decoder, string, field, map3 } from "./json";
+import { Account } from "./account";
+import { CSVSpec } from "./csvSpec";
 
 export enum DatabaseState {
   New,
@@ -14,11 +17,24 @@ export enum DatabaseState {
 }
 
 export class DatabaseConfig {
-  constructor(readonly id: string, readonly name: string, readonly journal: string, readonly dataDir: string) {
+  constructor(readonly id: string, readonly name: string, readonly journal: string, readonly dataDir: string, readonly accounts: Map<string, Account>) {
   }
 
   url(base: string): string {
     return [base, this.id].join("/");
+  }
+
+  serialize(): string {
+    return JSON.stringify({ name: this.name, journal: this.journal, dataDir: this.dataDir });
+  }
+
+  csvConfigForAccount(accountId: string): Maybe<CSVSpec> {
+    const account = this.accounts.get(accountId);
+    if (account) {
+      return Just(account.csvSpec);
+    } else {
+      return Nothing();
+    }
   }
 }
 
@@ -62,6 +78,31 @@ export class Database {
   url(base: string): string {
     return this.config.url(base);
   }
+
+  // parse pipeline
+  // raw csv -> records -> renaming rules -> combining -> filtering -> transactions
+
+  parseCsv(data: string): Transaction[] {
+    const parser = parse({ columns: true });
+    const results = new Array<Transaction>();
+
+    parser.on('readable', () => {
+      let record
+      // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
+      while (record = parser.read()) {
+        results.push(record)
+      }
+    });
+
+    parser.write(data);
+    parser.end();
+
+    return results;
+  }
+
+  // csvConfigForAccount(accountId: string): CSVSpec {
+  //   return this.config.csvConfigForAccount(accountId);
+  // }
 
   async transactions(): Promise<Result<string, TransactionRecord[]>> {
     if (this.state === DatabaseState.Loaded) {

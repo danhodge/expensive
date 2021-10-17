@@ -28,6 +28,7 @@
     "@masala/parser": "^1.0.0",
     "@types/express-handlebars": "^3.1.0",
     "browserslist": "^4.16.6",
+    "csv-parse": "^4.16.3",
     "elliptic": "^6.5.4",
     "express": "^4.17.1",
     "express-handlebars": "^5.3.0",
