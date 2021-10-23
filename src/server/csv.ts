@@ -2,8 +2,6 @@ import { default as csvParse } from 'csv-parse';
 import { Account } from './account';
 import { TransactionDate } from './transactionDate';
 
-// TODO: add a class for Account config
-
 export class CSVField {
   constructor(readonly field: string, readonly format?: string) {
   }
@@ -15,7 +13,7 @@ export class CSVSpec {
 }
 
 // can filters split a record into multiple records
-type CSVRecordFilter = (records: CSVRecord[]) => CSVRecord[];
+// type CSVRecordFilter = (records: CSVRecord[]) => CSVRecord[];
 
 // date, description, amount, filename, raw_data, position, src_category, dest_category
 // TODO: what is meant by source & dest?
@@ -63,7 +61,7 @@ export class CSVRecord {
   }
 
   // records from the same file with the same date, desc, amount are differentiated using the index
-  setIndex(index: number) {
+  setIndex(index: number): void {
     this.index = index;
   }
 
@@ -72,21 +70,21 @@ export class CSVRecord {
   }
 }
 
-export function parse(data: string, account: Account): CSVRecord[] {
+export function parse(data: string, filename: string, account: Account): CSVRecord[] {
   const parser = csvParse({ columns: true, relax_column_count: true });
   const records = new Array<CSVRecord>();
 
   parser.on('readable', () => {
-    const groupings = new Map<String, number>();
+    const groupings = new Map<string, number>();
     let record;
     // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
-    while (record = parser.read()) {
+    while ((record = parser.read())) {
       const amountCents = Number(record[account.csvSpec.amount.field]) * 100;
       const csvRecord = new CSVRecord(
         TransactionDate.parse(record[account.csvSpec.date.field]),
         record[account.csvSpec.description.field],
         amountCents,
-        "filename",
+        filename,
         (amountCents < 0) ? account.defaultSrcAccount : account.defaultDestAccount,
         (amountCents < 0) ? account.defaultDestAccount : account.defaultSrcAccount
       );

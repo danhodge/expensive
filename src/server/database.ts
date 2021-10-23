@@ -89,7 +89,7 @@ export class Database {
     parser.on('readable', () => {
       let record
       // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
-      while (record = parser.read()) {
+      while ((record = parser.read())) {
         results.push(record)
       }
     });

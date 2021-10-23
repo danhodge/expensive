@@ -6,7 +6,7 @@ export class TransactionDate {
 
   constructor(readonly year: number, readonly month: number, readonly date: number) { }
 
-  toString(): String {
+  toString(): string {
     return [
       this.year.toString(),
       this.month.toString().padStart(2, "0"),
