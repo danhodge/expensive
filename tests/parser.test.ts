@@ -1,10 +1,13 @@
 import { Streams } from '@masala/parser';
-import { parse, date, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitespace1, posting, record, hledger, blankLine, postingDescription, amount } from '../src/server/parser'
+import { TransactionDate } from '../src/server/transactionDate';
+import { parse, transactionDate, commentAndNewline, nonNewlineWhitespace, nonNewlineWhitespace1, posting, record, hledger, blankLine, postingDescription, amount } from '../src/server/parser'
 
 test("date", () => {
-  const r = date().parse(Streams.ofString("2020-11-13"));
+  const r = transactionDate().parse(Streams.ofString("2020-11-13"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value).toEqual(new Date(Date.parse("2020-11-13")));
+  expect(r.value.year).toEqual(2020);
+  expect(r.value.month).toEqual(11);
+  expect(r.value.date).toEqual(13);
 });
 
 test("nonNewlineWhitespace", () => {
@@ -59,7 +62,7 @@ test("record", () => {
   expect(r.isAccepted()).toEqual(true);
   expect(r.value).toEqual({
     id: "1",
-    date: new Date(Date.parse("2020-11-17")),
+    date: new TransactionDate(2020, 11, 17),
     description: "Some store",
     postings: [
       { category: "expenses:food:groceries", amountCents: -123, index: 0 },

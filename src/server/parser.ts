@@ -2,6 +2,7 @@ import { Streams, N, C, F, SingleParser, TupleParser } from '@masala/parser';
 import { Maybe, Just, Nothing } from 'seidr';
 import { Posting } from './posting';
 import { Transaction } from './transaction';
+import { TransactionDate } from './transactionDate';
 
 type BlankLine = unknown;
 
@@ -11,7 +12,7 @@ interface CommentLine {
 
 export interface TransactionRecord {
   id: string
-  date: Date
+  date: TransactionDate
   description: string
   postings: Posting[]
 }
@@ -50,20 +51,14 @@ export function blankLine(): SingleParser<BlankLine> {
   return nonNewlineWhitespace().then(C.charIn("\n")).map(() => { return {} });
 }
 
-export function date(): SingleParser<Date> {
+export function transactionDate(): SingleParser<TransactionDate> {
   return N.integer()
     .then(C.char('-').drop())
     .then(N.integer())
     .then(C.char('-').drop())
     .then(N.integer())
     .map(tuple => {
-      const date = new Date(tuple.at(0), tuple.at(1) - 1, tuple.at(2));
-      date.setUTCHours(0);
-      date.setUTCMinutes(0);
-      date.setUTCSeconds(0);
-      date.setUTCMilliseconds(0);
-
-      return date;
+      return new TransactionDate(tuple.at(0), tuple.at(1), tuple.at(2));
     });
 }
 
@@ -102,8 +97,8 @@ export function posting(): SingleParser<Posting> {
     .map(tuple => new Posting(tuple.at(2).map((str: string) => str).orElse(null), tuple.at(0), tuple.at(1)));
 }
 
-function recordDesc(): SingleParser<[Date, string, string?]> {
-  return date()
+function recordDesc(): SingleParser<[TransactionDate, string, string?]> {
+  return transactionDate()
     .then(nonNewlineWhitespace1().drop())
     .then(description())
     .then(comment().opt())
@@ -129,7 +124,7 @@ export function record(idGen: IdGenerator = new IdGenerator()): SingleParser<Tra
         return new Posting(idx, posting.category, posting.amountCents)
       });
 
-      return new Transaction(tuple.at(0)[2].map((str: string) => extractId(idGen, str)).orElse(idGen.id()), tuple.at(0)[0] as Date, tuple.at(0)[1], postings);
+      return new Transaction(tuple.at(0)[2].map((str: string) => extractId(idGen, str)).orElse(idGen.id()), tuple.at(0)[0] as TransactionDate, tuple.at(0)[1], postings);
     });
 }
 
