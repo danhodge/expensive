@@ -1,5 +1,6 @@
 import { CSVSpec } from './csv';
 import { Posting } from './posting';
+import { NamingRules } from './namingRules';
 
 export enum AccountType {
   Credit
@@ -8,9 +9,10 @@ export enum AccountType {
 export class Account {
   constructor(
     readonly type: AccountType,
-    readonly defaultSrcAccount: string,
-    readonly defaultDestAccount: string,
-    readonly csvSpec: CSVSpec
+    readonly accountName: string,
+    readonly csvSpec: CSVSpec,
+    readonly namingRules: NamingRules,
+    readonly postingRules: PostingRules
   ) {
   }
 
