@@ -41,16 +41,20 @@ export class CSVSpec {
 // credits are negative, debits are positive
 // in a transactions, money is subtracted from the source account and added to the dest account
 // e.g. getting paid, you subtract money from your salary account and add it to your checking account
+// buying something with cash - subtract money from your cash account and add it to the relevant expense account(s)
+// buying something with credit - subtract money from your credit card account and add it to the relevant expense account(s)
+// paying down a credit balance from checking - subtract money from your checking account and add it to the credit card account
 //
 // TODO: how to handle ID assignment for transactions that show up in multiple places? i.e. paying credit card bill from checking account?
 // - use a special rule that detects them and merges the transactions, similar to the paycheck splitting problem
 //
 export class CSVRecord {
   index: number;
+  description: string;
 
   constructor(
     readonly date: TransactionDate,
-    readonly description: string,
+    readonly rawDescription: string,
     readonly amountCents: number,
     readonly filename: string,
     //readonly rawData: string,     // csv-parse does not expose the raw data and reconstructing it is too difficult, would need to do something weird like pre-process the raw data
@@ -58,6 +62,7 @@ export class CSVRecord {
     readonly destCategory: string
   ) {
     this.index = 0;
+    this.description = rawDescription;
   }
 
   // records from the same file with the same date, desc, amount are differentiated using the index
@@ -82,9 +87,10 @@ export function parse(data: string, filename: string, account: Account): CSVReco
       const amountCents = Number(record[account.csvSpec.amount.field]) * 100;
       const csvRecord = new CSVRecord(
         TransactionDate.parse(record[account.csvSpec.date.field]),
-        record[account.csvSpec.description.field],
+        account.rename(record[account.csvSpec.description.field]),
         amountCents,
         filename,
+        // maybe CSVRecord is not necessary, can just use naming & posting converters on the CSV output
         (amountCents < 0) ? account.defaultSrcAccount : account.defaultDestAccount,
         (amountCents < 0) ? account.defaultDestAccount : account.defaultSrcAccount
       );
@@ -97,6 +103,10 @@ export function parse(data: string, filename: string, account: Account): CSVReco
   parser.end();
 
   return records;
+}
+
+export function toTransactions(record: CSVRecord[]): Transaction[] {
+
 }
 
 function indexCount<T>(map: Map<T, number>, key: T): number {

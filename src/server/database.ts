@@ -81,6 +81,36 @@ export class Database {
 
   // parse pipeline
   // raw csv -> records -> renaming rules -> combining -> filtering -> transactions
+  //   question - where/how do accounts get automatically assigned? that probably needs to happen after combining?
+  //
+  // [ string -> string -> Account -> CSVRecord[] ] -> CSVRecord[] -> CSVRecord[] -> CSVRecord[] - > Transaction[]
+  //
+  // CSVKey(account_id, date, raw_description, amount, index)
+  //
+  // 1. parse string into CSVRecord[] with descFn: (desc: string) => string
+  // 2. transform into Transaction[] using postFn (csvRecord: rec) => Posting[]
+  // 3. filter?
+  //
+  // metadata
+  //   id:<MD5(account_id, date, raw_description, amount, index)>
+  //   filename:? the same transaction id will appear in multiple files, filename is really just the first file it was seen in - still useful for grouping by imported at
+  //   import_id: the same info as filename, but makes it easier to attach metadata to it (where does this metadata live? database config? now it's a database, not just config...)
+  //
+  // Rules
+  // DatabaseConfig.Account.accountName - specifies account1
+  // Rules specify accounts2-N
+  //
+  // 03/11/2021,03/12/2021,STUFF,Shopping,Sale,-3.00,
+  // account1 = liabilities:credit cards:visa
+  // if sign is negative (credit), money was moving out of the credit card account (i.e. a purchase), so account1 amount is negative, and the balancing positive amount goes to expenses:unclassified or whatever rule(s) are matched
+  // if sign is positive (debit), money was moving into the credit card account (i.e. paying down balance) so account1 amount is positive and the balancing negative amount goes to income:unknown or whatever rule(s) are matched
+  //   note: maybe - positive amounts in credit accounts can either be income (a refund) or a transfer (coming from assets) - difficult to make a "default" choice for things without rules
+  //
+  // Notes: https://hledger.org/faq.html#why-are-revenues-liabilities-equity-negative-
+  // source account = the account that the money was subtracted from (the credit)
+  // destination account = the account that the money was added to (the debit)
+
+
 
   parseCsv(data: string): Transaction[] {
     const parser = parse({ columns: true });

@@ -8,6 +8,8 @@ export interface Storage {
   exists(path: string): Promise<boolean>;
   readPath(path: string): Promise<string>;
   writePath(path: string, data: string): Promise<void>;
+  writePathIfNonExistent(path: string, data: string): Promise<boolean>;
+  deletePath(path: string): Promise<boolean>;
 }
 
 type LockMode = "ex" | "sh" | "shnb" | "exnb" | "un";
@@ -126,6 +128,16 @@ export class FileStorage implements Storage {
     }
   }
 
+  async writePathIfNonExistent(path: string, data: string): Promise<boolean> {
+    // TODO: implement
+    return Promise.resolve(false);
+  }
+
+  async deletePath(path: string): Promise<boolean> {
+    // TODO: implement
+    return Promise.resolve(false);
+  }
+
   async toFullPath(path: string): Promise<string> {
     return join(await this.canonicalRootPath(), path);
   }
@@ -139,5 +151,60 @@ export class FileStorage implements Storage {
         resolve(handler());
       });
     });
+  }
+}
+
+export class InMemoryStorage implements Storage {
+  files: Map<string, string>;
+
+  constructor() {
+    this.files = new Map<string, string>();
+  }
+
+  async scan<T>(filter: (path: string) => Maybe<T>): Promise<Map<string, T>> {
+    const matches = new Map<string, T>();
+    this.files.forEach((_value: string, path: string) => {
+      filter(path).caseOf({
+        Just: val => matches.set(path, val),
+        Nothing: () => matches
+      });
+    });
+
+    return Promise.resolve(matches);
+  }
+
+  async exists(path: string): Promise<boolean> {
+    return Promise.resolve(this.files.has(path));
+  }
+
+  async readPath(path: string): Promise<string> {
+    const value = this.files.get(path);
+    if (value) {
+      return Promise.resolve(value);
+    } else {
+      return Promise.reject();
+    }
+  }
+
+  async writePath(path: string, data: string): Promise<void> {
+    this.files.set(path, data);
+  }
+
+  async deletePath(path: string): Promise<boolean> {
+    if (this.files.has(path)) {
+      this.files.delete(path);
+      return Promise.resolve(true);
+    } else {
+      return Promise.resolve(false);
+    }
+  }
+
+  async writePathIfNonExistent(path: string, data: string): Promise<boolean> {
+    if (this.files.has(path)) {
+      this.files.set(path, data);
+      return Promise.resolve(true);
+    } else {
+      return Promise.resolve(false);
+    }
   }
 }

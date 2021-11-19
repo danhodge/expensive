@@ -1,5 +1,6 @@
 import { string, int, field, map3 } from "./json"
 
+// TODO: should change 'category' to 'account'
 const postingDecoder = map3(
   (index: number, catg: string, amt: number) => new Posting(index, catg, amt),
   field("index", int()),

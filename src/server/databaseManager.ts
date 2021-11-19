@@ -1,5 +1,5 @@
 import { Just, Nothing } from 'seidr';
-import { Database, DatabaseState, dbConfigDecoder } from './database';
+import { Database, DatabaseConfig, DatabaseState, dbConfigDecoder } from './database';
 import { Storage } from './storage';
 import { decodeString } from './json';
 
@@ -22,6 +22,19 @@ export class DatabaseManager {
   //   ).then((dbs) => Ok(dbs))
   //     .catch((err) => Err(err));
   // }
+
+  async createDatabase(config: DatabaseConfig): Promise<Database> {
+    return await
+      this.storage
+        .writePath(`${config.id}.expensive.json`, config.serialize())
+        .then(() => this.storage.writePathIfNonExistent(config.journal, ""))
+        .then(() => this.database(config.id))
+        .catch((err) => {
+          this.storage.deletePath(`${config.id}.expensive.json`);
+          this.storage.deletePath(config.journal);
+          throw err;
+        });
+  }
 
   async databases(): Promise<Array<Database>> {
     const pattern = /^(?<id>.+)\.expensive\.json$/;
@@ -60,11 +73,12 @@ export class DatabaseManager {
 
   async database(id: string): Promise<Database> {
     return this.databases().then(dbs => {
+      console.log(`HERE ARE THE DBs: ${dbs.length}`);
       const db = dbs.find(db => db.id() === id);
       if (db !== undefined) {
         return db;
       } else {
-        return Promise.reject(`No database found for with ${id}`);
+        return Promise.reject(`No database found with ${id}`);
       }
     });
   }
