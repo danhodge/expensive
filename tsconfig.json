@@ -1,6 +1,7 @@
 {
   "extends": "@tsconfig/recommended/tsconfig.json",
   "compilerOptions": {
+    "esModuleInterop": true,
     "sourceMap": true,
     "outDir": "dist",
     "baseUrl": ".",
