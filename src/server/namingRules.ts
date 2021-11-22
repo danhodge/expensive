@@ -6,7 +6,7 @@ export class NamingRules {
   rules: Array<NamingRule>;
 
   constructor(readonly patterns: Map<string, string>) {
-    this.rules = new Array<NamingRule>();
+    this.rules = new Array();
     patterns.forEach((name: string, pattern: string) => {
       const regexp = new RegExp(pattern);
       this.rules.push((str: string) => {

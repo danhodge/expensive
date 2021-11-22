@@ -1,6 +1,7 @@
 import { default as csvParse } from 'csv-parse';
 import { Account } from './account';
 import { TransactionDate } from './transactionDate';
+import { Transaction } from './transaction';
 
 export class CSVField {
   constructor(readonly field: string, readonly format?: string) {
@@ -75,9 +76,9 @@ export class CSVRecord {
   }
 }
 
-export function parse(data: string, filename: string, account: Account): CSVRecord[] {
+export function parse(data: string, filename: string, account: Account): Transaction[] {
   const parser = csvParse({ columns: true, relax_column_count: true });
-  const records = new Array<CSVRecord>();
+  const records = new Array<Transaction>();
 
   parser.on('readable', () => {
     const groupings = new Map<string, number>();
@@ -85,17 +86,32 @@ export function parse(data: string, filename: string, account: Account): CSVReco
     // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
     while ((record = parser.read())) {
       const amountCents = Number(record[account.csvSpec.amount.field]) * 100;
-      const csvRecord = new CSVRecord(
+      const rawDescription = record[account.csvSpec.description.field];
+      const date = TransactionDate.parse(record[account.csvSpec.date.field]);
+      const canonicalDescription = account.rename(rawDescription);
+      const indexKey = [date.toString, rawDescription, amountCents].join("_");
+      const idMaterial = [account.id, indexKey, indexCount(groupings, indexKey)].join("_");
+
+      const txn = new Transaction(
+        "MD5<idMaterial>", 
         TransactionDate.parse(record[account.csvSpec.date.field]),
-        account.rename(record[account.csvSpec.description.field]),
-        amountCents,
-        filename,
-        // maybe CSVRecord is not necessary, can just use naming & posting converters on the CSV output
-        (amountCents < 0) ? account.defaultSrcAccount : account.defaultDestAccount,
-        (amountCents < 0) ? account.defaultDestAccount : account.defaultSrcAccount
+        canonicalDescription, 
+        account.createPostings(canonicalDescription, amountCents)
       );
-      csvRecord.setIndex(indexCount(groupings, csvRecord.indexKey()));
-      records.push(csvRecord);
+   
+      records.push(txn);
+
+      // const csvRecord = new CSVRecord(
+      //   TransactionDate.parse(record[account.csvSpec.date.field]),
+      //   account.rename(record[account.csvSpec.description.field]),
+      //   amountCents,
+      //   filename,
+      //   // maybe CSVRecord is not necessary, can just use naming & posting converters on the CSV output
+      //   (amountCents < 0) ? account.defaultSrcAccount : account.defaultDestAccount,
+      //   (amountCents < 0) ? account.defaultDestAccount : account.defaultSrcAccount
+      // );
+      // csvRecord.setIndex(indexCount(groupings, csvRecord.indexKey()));
+      // records.push(csvRecord);
     }
   });
 
@@ -103,10 +119,6 @@ export function parse(data: string, filename: string, account: Account): CSVReco
   parser.end();
 
   return records;
-}
-
-export function toTransactions(record: CSVRecord[]): Transaction[] {
-
 }
 
 function indexCount<T>(map: Map<T, number>, key: T): number {
