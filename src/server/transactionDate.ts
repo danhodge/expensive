@@ -1,5 +1,5 @@
 import { string, Decoder } from "./json";
-import { Result, Ok, Err } from 'seidr';
+import { Ok, Err } from 'seidr';
 
 export class TransactionDate {
   // TODO: this needs to handle unparseable dates

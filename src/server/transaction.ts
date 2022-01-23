@@ -1,7 +1,7 @@
 import { postingDecoder, Posting } from "./posting";
 import { TransactionDate, transactionDate } from "./transactionDate";
 import { TransactionRecord } from "./parser";
-import { string, date, field, array, map4 } from "./json"
+import { string, field, array, map4 } from "./json"
 
 const transactionDecoder = map4(
   (id: string, date: TransactionDate, desc: string, postings: Posting[]) => new Transaction(id, date, desc, postings),

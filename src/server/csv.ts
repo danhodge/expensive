@@ -1,4 +1,5 @@
 import { default as csvParse } from 'csv-parse';
+import { Md5 } from 'ts-md5/dist/md5';
 import { Account } from './account';
 import { TransactionDate } from './transactionDate';
 import { Transaction } from './transaction';
@@ -89,16 +90,16 @@ export function parse(data: string, filename: string, account: Account): Transac
       const rawDescription = record[account.csvSpec.description.field];
       const date = TransactionDate.parse(record[account.csvSpec.date.field]);
       const canonicalDescription = account.rename(rawDescription);
-      const indexKey = [date.toString, rawDescription, amountCents].join("_");
+      const indexKey = [date.toString(), rawDescription, amountCents].join("_");
       const idMaterial = [account.id, indexKey, indexCount(groupings, indexKey)].join("_");
 
       const txn = new Transaction(
-        "MD5<idMaterial>", 
+        Md5.hashStr(idMaterial),
         TransactionDate.parse(record[account.csvSpec.date.field]),
-        canonicalDescription, 
+        canonicalDescription,
         account.createPostings(canonicalDescription, amountCents)
       );
-   
+
       records.push(txn);
 
       // const csvRecord = new CSVRecord(

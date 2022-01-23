@@ -22,7 +22,7 @@ export class Account {
     return this.namingRules.apply(description);
   }
 
-  createPostings(description: string, amountCents: number): Posting[] {
-    return [];
+  createPostings(canonicalDescription: string, amountCents: number): Posting[] {
+    return this.postingRules.apply(canonicalDescription, amountCents);
   }
 }

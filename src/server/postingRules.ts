@@ -1,4 +1,3 @@
-import { Maybe, Just, Nothing } from 'seidr';
 import { AccountType } from './account';
 import { Posting } from './posting';
 
@@ -10,8 +9,7 @@ export class PostingRules {
   constructor(
     readonly mappings: Map<string, Array<string>>,
     readonly accountName: string,
-    readonly accountType: AccountType,
-    readonly defaultBalanceAccountName: string   // do all accounts have a default balance account?
+    readonly accountType: AccountType
   ) {
     this.rules = new Map();
     mappings.forEach((names: string[], account: string) => {
@@ -53,13 +51,15 @@ export class PostingRules {
   // TODO: add support for automatically splitting a posting into muliple accounts
   apply(canonicalName: string, amountCents: number): Posting[] {
     const account = this.rules.get(canonicalName);
-    if (account) {
+    if (account && amountCents < 0) {
       // TODO: which posting goes first by default?
       return [new Posting(0, this.accountName, amountCents), new Posting(1, account, amountCents * -1)];
     } else if (!account && amountCents < 0) {
       return [new Posting(0, this.accountName, amountCents), new Posting(1, "expenses:unclassified", amountCents * -1)];
+    } else if (account && amountCents >= 0) {
+      return [new Posting(0, account, amountCents * -1), new Posting(1, this.accountName, amountCents)];
     } else {
-      return new Array();
+      return [new Posting(0, "expenses:unclassified", amountCents * -1), new Posting(1, this.accountName, amountCents)];
     }
   }
 }

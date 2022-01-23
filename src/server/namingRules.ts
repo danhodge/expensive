@@ -6,7 +6,7 @@ export class NamingRules {
   rules: Array<NamingRule>;
 
   constructor(readonly patterns: Map<string, string>) {
-    this.rules = new Array();
+    this.rules = [];
     patterns.forEach((name: string, pattern: string) => {
       const regexp = new RegExp(pattern);
       this.rules.push((str: string) => {
@@ -23,11 +23,11 @@ export class NamingRules {
     // TODO: would be better to short-circuit once a naming rule match is hit
     const reducer = (memo: Maybe<string>, rule: NamingRule) => {
       return memo.caseOf({
-        Just: newName => memo,
+        Just: () => memo,
         Nothing: () => rule(name)
       });
     };
-    
+
     return this.rules.reduce(reducer, Nothing()).caseOf({
       Just: newName => newName,
       Nothing: () => name
