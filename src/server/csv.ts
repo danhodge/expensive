@@ -1,6 +1,8 @@
 import { default as csvParse } from 'csv-parse';
 import { Md5 } from 'ts-md5/dist/md5';
+import { Maybe } from 'seidr';
 import { Account } from './account';
+import { field, map2, map3, maybe, string, } from "./json"
 import { TransactionDate } from './transactionDate';
 import { Transaction } from './transaction';
 
@@ -13,6 +15,26 @@ export class CSVSpec {
   constructor(readonly date: CSVField, readonly description: CSVField, readonly amount: CSVField) {
   }
 }
+
+const csvFieldDecoder = map2(
+  (field: string, format: Maybe<string>) => {
+    const fmt = format.caseOf({
+      Just: val => val,
+      Nothing: () => undefined
+    });
+    return new CSVField(field, fmt);
+  },
+  field("field", string()),
+  maybe(field("format", string()))
+);
+
+const csvSpecDecoder = map3(
+  (date: CSVField, desc: CSVField, amount: CSVField) => new CSVSpec(date, desc, amount),
+  field("date", csvFieldDecoder),
+  field("description", csvFieldDecoder),
+  field("amount", csvFieldDecoder)
+);
+export { csvSpecDecoder };
 
 // can filters split a record into multiple records
 // type CSVRecordFilter = (records: CSVRecord[]) => CSVRecord[];
@@ -97,7 +119,7 @@ export function parse(data: string, filename: string, account: Account): Transac
         Md5.hashStr(idMaterial),
         TransactionDate.parse(record[account.csvSpec.date.field]),
         canonicalDescription,
-        account.createPostings(canonicalDescription, amountCents)
+        account.createPostings(rawDescription, account.accountName, amountCents)
       );
 
       records.push(txn);

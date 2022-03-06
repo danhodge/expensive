@@ -201,10 +201,10 @@ export class InMemoryStorage implements Storage {
 
   async writePathIfNonExistent(path: string, data: string): Promise<boolean> {
     if (this.files.has(path)) {
+      return Promise.resolve(false);
+    } else {
       this.files.set(path, data);
       return Promise.resolve(true);
-    } else {
-      return Promise.resolve(false);
     }
   }
 }

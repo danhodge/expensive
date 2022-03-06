@@ -3,9 +3,9 @@ import { default as parse } from 'csv-parse';
 import { Storage } from './storage';
 import { parse2, TransactionRecord } from './parser';
 import { Transaction, hledgerTransactionsSerialize } from './transaction';
-import { Decoder, string, field, map3 } from "./json";
-import { Account } from "./account";
-import { CSVSpec } from "./csvSpec";
+import { Decoder, array, string, field, map4 } from "./json";
+import { Account, accountDecoder } from "./account";
+import { CSVSpec } from "./csv";
 
 export enum DatabaseState {
   New,
@@ -17,7 +17,13 @@ export enum DatabaseState {
 }
 
 export class DatabaseConfig {
-  constructor(readonly id: string, readonly name: string, readonly journal: string, readonly dataDir: string, readonly accounts: Map<string, Account>) {
+  accountsById: Map<string, Account>;
+
+  constructor(readonly id: string, readonly name: string, readonly journal: string, readonly dataDir: string, accounts: Array<Account>) {
+    this.accountsById = new Map<string, Account>();
+    accounts.forEach((account: Account) => {
+      this.accountsById.set(account.id, account);
+    });
   }
 
   url(base: string): string {
@@ -29,7 +35,7 @@ export class DatabaseConfig {
   }
 
   csvConfigForAccount(accountId: string): Maybe<CSVSpec> {
-    const account = this.accounts.get(accountId);
+    const account = this.accountsById.get(accountId);
     if (account) {
       return Just(account.csvSpec);
     } else {
@@ -39,11 +45,12 @@ export class DatabaseConfig {
 }
 
 export function dbConfigDecoder(dbId: string): Decoder<DatabaseConfig> {
-  return map3(
-    (name: string, journal: string, dataDir: string) => new DatabaseConfig(dbId.toString(), name, journal, dataDir),
+  return map4(
+    (name: string, journal: string, dataDir: string, accounts: Array<Account>) => new DatabaseConfig(dbId.toString(), name, journal, dataDir, accounts),
     field("name", string()),
     field("journal", string()),
     field("dataDir", string()),
+    field("accounts", array(accountDecoder))
   );
 }
 

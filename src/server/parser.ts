@@ -4,6 +4,8 @@ import { Posting } from './posting';
 import { Transaction } from './transaction';
 import { TransactionDate } from './transactionDate';
 
+// Other TS/JS parser library: https://github.com/GregRos/parjs
+
 type BlankLine = unknown;
 
 interface CommentLine {
@@ -157,10 +159,10 @@ function indexMap<T, U>(arr: T[], fn: (val: T, index: number) => U): U[] {
   return results;
 }
 
-function filterMap<T, U>(arr: T[], fn: (val: T) => Maybe<U>): U[] {
+export function filterMap<T, U>(arr: T[], fn: (val: T, index: number) => Maybe<U>): U[] {
   const results = new Array<U>();
   for (let i = 0; i < arr.length; i++) {
-    fn(arr[i]).caseOf({
+    fn(arr[i], i).caseOf({
       Just: (val: U) => results.push(val),
       Nothing: () => { /* no-op */ }
     });

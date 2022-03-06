@@ -6,6 +6,10 @@ export class PostingRules {
   // key = canonical name, value = account
   rules: Map<string, string>;
 
+  static empty(accountName: string, accountType: AccountType): PostingRules {
+    return new PostingRules(new Map(), accountName, accountType);
+  }
+
   constructor(
     readonly mappings: Map<string, Array<string>>,
     readonly accountName: string,

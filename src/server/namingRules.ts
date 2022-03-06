@@ -1,36 +1,38 @@
-import { Maybe, Just, Nothing } from 'seidr';
+import { Posting } from './posting';
+import { NamingRule, namingRuleDecoder } from './namingRule';
+import { array, map } from './json';
 
-type NamingRule = (name: string) => Maybe<string>;
+const namingRulesDecoder = map(
+  (rules: Array<NamingRule>) => new NamingRules(rules),
+  array(namingRuleDecoder)
+);
+export { namingRulesDecoder };
 
 export class NamingRules {
-  rules: Array<NamingRule>;
+  constructor(readonly namingRules: Array<NamingRule>) { }
 
-  constructor(readonly patterns: Map<string, string>) {
-    this.rules = [];
-    patterns.forEach((name: string, pattern: string) => {
-      const regexp = new RegExp(pattern);
-      this.rules.push((str: string) => {
-        if (regexp.test(str)) {
-          return Just(name);
-        } else {
-          return Nothing();
-        }
-      });
-    });
+  static empty(): NamingRules {
+    return new NamingRules([]);
   }
 
-  apply(name: string): string {
-    // TODO: would be better to short-circuit once a naming rule match is hit
-    const reducer = (memo: Maybe<string>, rule: NamingRule) => {
-      return memo.caseOf({
-        Just: () => memo,
-        Nothing: () => rule(name)
-      });
-    };
+  rename(name: string): string {
+    const match = this.namingRules.find((rule: NamingRule) => rule.isMatch(name));
+    if (match) {
+      return match.description;
+    } else {
+      return name;
+    }
+  }
 
-    return this.rules.reduce(reducer, Nothing()).caseOf({
-      Just: newName => newName,
-      Nothing: () => name
-    });
+  createPostings(name: string, accountName: string, amountCents: number): Posting[] {
+    const match = this.namingRules.find((rule: NamingRule) => rule.isMatch(name));
+
+    if (match) {
+      return match.apply(amountCents, accountName);
+    } else if (amountCents < 0) {
+      return [new Posting(0, accountName, amountCents), new Posting(1, "expenses:unclassified", amountCents * -1)];
+    } else {
+      return [new Posting(0, "expenses:unclassified", amountCents * -1), new Posting(1, accountName, amountCents)];
+    }
   }
 }

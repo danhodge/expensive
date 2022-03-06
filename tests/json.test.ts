@@ -1,4 +1,5 @@
-import { string, int, date, field, map3, map4, array, decodeString } from '../src/server/json'
+import { Maybe } from 'seidr';
+import { string, int, date, field, map2, map3, map4, maybe, array, decodeString } from '../src/server/json'
 
 class Other {
   constructor(readonly id: number, readonly category: string, readonly amountCents: number) { }
@@ -50,5 +51,33 @@ test("parse multiple transactions", () => {
   decodeString(array(transactionDecoder), str).caseOf({
     Err: err => fail(`failed to parse transaction - error: ${err}`),
     Ok: txn => console.log(txn)
+  });
+});
+
+test("successfully parse optional field when it is present", () => {
+  const fn = (id: number, name: Maybe<string>) => {
+    expect(id).toEqual(123);
+    expect(name.getOrElse(undefined)).toEqual("Steve");
+  }
+  const dec = map2(fn, field("id", int()), maybe(field("name", string())));
+
+  const str = '{"id":123,"name":"Steve"}';
+  decodeString(dec, str).caseOf({
+    Err: err => fail(`failed to parse JSON - error: ${err}`),
+    Ok: () => console.log("Ok")
+  });
+});
+
+test("successfully parse optional field when it is absent", () => {
+  const fn = (id: number, name: Maybe<string>) => {
+    expect(id).toEqual(123);
+    expect(name.getOrElse("Bob")).toEqual("Bob");
+  }
+  const dec = map2(fn, field("id", int()), maybe(field("name", string())));
+
+  const str = '{"id":123}';
+  decodeString(dec, str).caseOf({
+    Err: err => fail(`failed to parse JSON - error: ${err}`),
+    Ok: () => console.log("Ok")
   });
 });
