@@ -16,3 +16,14 @@ test("scan dir", async () => {
   expect(paths.size).toEqual(1);
   expect([...paths.values()].map((p) => basename(p))).toEqual(["index.js"]);
 });
+
+test("delete path", async () => {
+  const storage = new FileStorage(resolve("."));
+  const path = "dummy.txt";
+
+  await storage.writePath(path, "Dummy Data");
+  expect(await storage.exists(path)).toEqual(true);
+
+  expect(await storage.deletePath(path)).toEqual(true);
+  expect(await storage.exists(path)).toEqual(false);
+});

@@ -1,4 +1,4 @@
-import { open, readdir, realpath, stat, FileHandle } from 'fs/promises';
+import { open, readdir, realpath, stat, unlink, FileHandle } from 'fs/promises';
 import { flock } from 'fs-ext';
 import { join } from 'path';
 import { Maybe } from 'seidr';
@@ -129,13 +129,29 @@ export class FileStorage implements Storage {
   }
 
   async writePathIfNonExistent(path: string, data: string): Promise<boolean> {
-    // TODO: implement
-    return Promise.resolve(false);
+    if (await this.exists(path)) {
+      return Promise.resolve(false);
+    } else {
+      return this.writePath(path, data)
+        .then(() => true)
+        .catch(() => false);  // TODO: misleading, since a failed write looks the same as path already exists
+    }
   }
 
   async deletePath(path: string): Promise<boolean> {
-    // TODO: implement
-    return Promise.resolve(false);
+    let handle: FileHandle | undefined;
+
+    try {
+      const fullPath = await this.toFullPath(path);
+      const openHandle = await open(fullPath, "w");
+      handle = openHandle;
+
+      return this.lockFile(openHandle, "ex", () => unlink(path))
+        .then(() => true)
+        .catch(() => false);
+    } finally {
+      await handle?.close();
+    }
   }
 
   async toFullPath(path: string): Promise<string> {
