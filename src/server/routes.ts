@@ -35,12 +35,7 @@ export function createRoutes(dbManager: DatabaseManager): Router {
     // see: https://www.wisdomgeek.com/development/web-development/using-async-await-in-expressjs/
     try {
       const db = await dbManager.database(req.params.dbId);
-      const txnResult = await db.transactions();
-
-      txnResult.caseOf({
-        Ok: txns => res.json(txns.map(serialize)),
-        Err: err => res.status(400).json({ status: `Error: ${err}`, state: db.state })
-      });
+      res.json([...db.allTransactions()].map(serialize));
 
       // TODO: return more information
       //  if successfully loaded -> list of transactions

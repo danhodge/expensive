@@ -9,10 +9,18 @@ import { Transaction } from './transaction';
 export class CSVField {
   constructor(readonly field: string, readonly format?: string) {
   }
+
+  serialize(): CSVField {
+    return this;
+  }
 }
 
 export class CSVSpec {
   constructor(readonly date: CSVField, readonly description: CSVField, readonly amount: CSVField) {
+  }
+
+  serialize(): CSVSpec {
+    return this;
   }
 }
 

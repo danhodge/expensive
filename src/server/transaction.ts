@@ -38,10 +38,14 @@ export function hledgerTransactionSerialize(record: Transaction): string {
   ].concat(record.postings.map(hledgedPostingSerialize(maxCategoryLen))).join("\n")
 }
 
-export function hledgerTransactionsSerialize(records: TransactionRecord[]): string {
-  return records.map(hledgerTransactionSerialize).join("\n\n") + "\n"
+export function hledgerTransactionsSerialize(records: Iterable<TransactionRecord>): string {
+  return [...records].map(hledgerTransactionSerialize).join("\n\n") + "\n"
 }
 
 export class Transaction implements TransactionRecord {
-  constructor(readonly id: string, readonly date: TransactionDate, readonly description: string, readonly postings: Posting[]) { }
+  constructor(
+    readonly id: string,
+    readonly date: TransactionDate,
+    readonly description: string,
+    readonly postings: Posting[]) { }
 }

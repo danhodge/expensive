@@ -6,12 +6,12 @@ export function createRoutes(dbManager: DatabaseManager): Router {
 
   router.post("/:dbId/upload/:accountId", async (req: Request, resp: Response) => {
     const db = await dbManager.database(req.params.dbId);
-    console.log(`HERE IS THE DB: ${db}, ${req.body}`);
 
-    // fetch CSV config from db by accountId
+    // fetch CSV config from db by accountId & parse CSV data into transactions
+    const txns = db.parseCsv(req.params.accountId, req.body);
 
-    // parse CSV data into transactions
     // add transactions to db
+    await db.createOrUpdateTransactions(txns);
 
     resp.status(200).json({ status: "OK" });
   });

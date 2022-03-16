@@ -1,15 +1,35 @@
+import { SumType } from 'sums-up';
 import { Just, Maybe, Nothing } from 'seidr';
 import { Posting } from './posting';
 import { filterMap } from './parser';
 import { array, field, map3, maybe, string } from './json';
 
-type Apportioner = (remainder: number) => number;
+class AccountRuleDefinition extends SumType<{
+  Amount: [number],
+  Percentage: [number],
+  Remainder: []
+}> { }
 
 class AccountRule {
-  constructor(readonly name: string, readonly apportioner: Apportioner) { }
+  constructor(readonly name: string, readonly definition: AccountRuleDefinition) { }
+
+  serialize(): { name: string, amount?: string, pct?: string } {
+    const result: { name: string, amount?: string, pct?: string } = { name: this.name };
+    this.definition.caseOf({
+      Amount: amt => result.amount = amt.toString(),
+      Percentage: pct => result.pct = pct.toString(),
+      Remainder: () => "ignore"
+    });
+
+    return result;
+  }
 
   portion(remainder: number): number {
-    return this.apportioner(remainder);
+    return this.definition.caseOf({
+      Amount: amt => amt,
+      Percentage: pct => pct * remainder,
+      Remainder: () => remainder
+    });
   }
 }
 
@@ -52,19 +72,30 @@ export class NamingRule {
 
       if (name && (amount && !pct)) {
         const amountCents = parseInt(amount, 10);
-        return Just(new AccountRule(name, () => amountCents));
+        return Just(new AccountRule(name, new AccountRuleDefinition("Amount", amountCents)));
       } else if (name && ((pct && !amount) || isLastRule)) {
-        const percentage = (!pct) ? 1 : parseFloat(pct);
-        return Just(new AccountRule(name, (remainder: number) => remainder * percentage));
+        if (!pct) {
+          return Just(new AccountRule(name, new AccountRuleDefinition("Remainder")));
+        } else {
+          const percentage = (!pct) ? 1 : parseFloat(pct);
+          return Just(new AccountRule(name, new AccountRuleDefinition("Percentage", percentage)));
+        }
       } else {
         return Nothing();
       }
     });
   }
 
+  serialize(): { description: string, patterns: string[], accounts: unknown[] } {
+    return {
+      description: this.description,
+      patterns: this.rules.map((pat) => pat.source),
+      accounts: this.accountRules.map((rule) => rule.serialize())
+    }
+  }
+
   isMatch(name: string): boolean {
     const match = this.rules.find((pattern: RegExp) => pattern.test(name));
-
     return match !== undefined;
   }
 

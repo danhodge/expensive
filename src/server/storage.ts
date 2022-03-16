@@ -179,10 +179,10 @@ export class InMemoryStorage implements Storage {
 
   async readPath(path: string): Promise<string> {
     const value = this.files.get(path);
-    if (value) {
-      return Promise.resolve(value);
-    } else {
+    if (value === undefined) {
       return Promise.reject();
+    } else {
+      return Promise.resolve(value);
     }
   }
 

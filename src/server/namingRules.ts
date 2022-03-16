@@ -15,6 +15,10 @@ export class NamingRules {
     return new NamingRules([]);
   }
 
+  serialize(): unknown[] {
+    return this.namingRules.map((rule) => rule.serialize());
+  }
+
   rename(name: string): string {
     const match = this.namingRules.find((rule: NamingRule) => rule.isMatch(name));
     if (match) {

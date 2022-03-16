@@ -1,11 +1,11 @@
 import { Maybe, Just, Nothing, Result, Ok, Err } from 'seidr';
-import { default as parse } from 'csv-parse';
+// import { default as parse } from 'csv-parse';
 import { Storage } from './storage';
 import { parse2, TransactionRecord } from './parser';
 import { Transaction, hledgerTransactionsSerialize } from './transaction';
 import { Decoder, array, string, field, map4 } from "./json";
 import { Account, accountDecoder } from "./account";
-import { CSVSpec } from "./csv";
+import { parse, CSVSpec } from "./csv";
 
 export enum DatabaseState {
   New,
@@ -19,7 +19,13 @@ export enum DatabaseState {
 export class DatabaseConfig {
   accountsById: Map<string, Account>;
 
-  constructor(readonly id: string, readonly name: string, readonly journal: string, readonly dataDir: string, accounts: Array<Account>) {
+  constructor(
+    readonly id: string,
+    readonly name: string,
+    readonly journal: string,
+    readonly dataDir: string,
+    accounts: Array<Account>
+  ) {
     this.accountsById = new Map<string, Account>();
     accounts.forEach((account: Account) => {
       this.accountsById.set(account.id, account);
@@ -30,8 +36,14 @@ export class DatabaseConfig {
     return [base, this.id].join("/");
   }
 
-  serialize(): string {
-    return JSON.stringify({ name: this.name, journal: this.journal, dataDir: this.dataDir });
+  // TODO: Array<unknown> is a hack, need to define type for Account
+  serialize(): { name: string, journal: string, dataDir: string, accounts: Array<unknown> } {
+    return {
+      name: this.name,
+      journal: this.journal,
+      dataDir: this.dataDir,
+      accounts: Array.from(this.accountsById.values()).map(account => account.serialize())
+    };
   }
 
   csvConfigForAccount(accountId: string): Maybe<CSVSpec> {
@@ -56,11 +68,24 @@ export function dbConfigDecoder(dbId: string): Decoder<DatabaseConfig> {
 
 export class Database {
   state: DatabaseState;
-  transactionRecords!: TransactionRecord[];
+  transactionRecords: Map<string, TransactionRecord>;
 
-  constructor(readonly config: DatabaseConfig, readonly storage: Storage) {
+  private constructor(readonly config: DatabaseConfig, readonly transactions: TransactionRecord[], readonly storage: Storage) {
     this.storage = storage;
+    this.transactionRecords = new Map<string, TransactionRecord>();
+    transactions.forEach(txn => this.transactionRecords.set(txn.id, txn));
     this.state = DatabaseState.New;
+  }
+
+  static async load(config: DatabaseConfig, storage: Storage): Promise<Result<string, Database>> {
+    return storage.readPath(config.journal)
+      .then(data => parse2(data))
+      .then(txns => {
+        return Ok(new Database(config, txns, storage));
+      })
+      .catch(err => {
+        return Err(err);
+      });
   }
 
   // TODO: make this smarter so checkState(Initialized) returns true when state = Loaded
@@ -117,62 +142,105 @@ export class Database {
   // source account = the account that the money was subtracted from (the credit)
   // destination account = the account that the money was added to (the debit)
 
-
-
-  parseCsv(data: string): Transaction[] {
-    const parser = parse({ columns: true });
-    const results = new Array<Transaction>();
-
-    parser.on('readable', () => {
-      let record
-      // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
-      while ((record = parser.read())) {
-        results.push(record)
-      }
-    });
-
-    parser.write(data);
-    parser.end();
-
-    return results;
+  parseCsv(accountId: string, data: string): Transaction[] {
+    const account = this.config.accountsById.get(accountId);
+    if (account) {
+      return parse(data, "", account);
+    } else {
+      return [];
+    }
   }
+
+  // parseCsv(data: string): Transaction[] {
+  //   const parser = parse({ columns: true });
+  //   const results = new Array<Transaction>();
+
+  //   parser.on('readable', () => {
+  //     let record
+  //     // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
+  //     while ((record = parser.read())) {
+  //       results.push(record)
+  //     }
+  //   });
+
+  //   parser.write(data);
+  //   parser.end();
+
+  //   return results;
+  // }
 
   // csvConfigForAccount(accountId: string): CSVSpec {
   //   return this.config.csvConfigForAccount(accountId);
   // }
 
-  async transactions(): Promise<Result<string, TransactionRecord[]>> {
-    if (this.state === DatabaseState.Loaded) {
-      return Promise.resolve(Ok(this.transactionRecords));
-    } else if (this.state === DatabaseState.Initialized) {
-      return this.storage.readPath(this.config.journal)
-        .then(data => parse2(data))
-        .then(txns => {
-          this.transactionRecords = txns;
-          this.state = DatabaseState.Loaded;
+  // async transactions(): Promise<Result<string, TransactionRecord[]>> {
+  //   if (this.state === DatabaseState.Loaded) {
+  //     return Promise.resolve(Ok(this.transactionRecords));
+  //   } else if (this.state === DatabaseState.Initialized) {
+  //     return this.storage.readPath(this.config.journal)
+  //       .then(data => parse2(data))
+  //       .then(txns => {
+  //         this.transactionRecords = txns;
+  //         this.state = DatabaseState.Loaded;
 
-          return Ok(txns);
-        })
-        .catch(err => {
-          if (err === "Parse Error") {
-            // TODO: better way to distinguish between errors
-            this.state = DatabaseState.Invalid;
-          } else {
-            this.state = DatabaseState.Error;
-          }
-          return Err(err);
-        });
+  //         return Ok(txns);
+  //       })
+  //       .catch(err => {
+  //         if (err === "Parse Error") {
+  //           // TODO: better way to distinguish between errors
+  //           this.state = DatabaseState.Invalid;
+  //         } else {
+  //           this.state = DatabaseState.Error;
+  //         }
+  //         return Err(err);
+  //       });
+  //   } else {
+  //     this.state = DatabaseState.Error;
+  //     return Promise.resolve(Err(`Failed to load transactions: ${this.state}`));
+  //   }
+  // }
+
+  allTransactions(): Iterable<TransactionRecord> {
+    return this.transactionRecords.values();
+  }
+
+  // TODO: it's ok to update a transaction by id but weird since the computed id of the update might not match the actual data 
+  async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
+    if (this.transactionRecords.has(id)) {
+      const updated = new Transaction(record.id, record.date, record.description, record.postings);
+      this.transactionRecords.set(id, updated);
+
+      return this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords.values()))
+        .then(() => Promise.resolve(Ok(updated)))
+        .catch(err => Promise.reject(err));
     } else {
-      return Promise.resolve(Err(`Failed to load transactions: ${this.state}`));
+      return Promise.reject(Err(`updateTransaction: Transaction not found: ${id}`));
     }
   }
 
-  async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
-    return this.transactions()
-      .then(txns => this.findTransaction(txns, id))
-      .then(idx => this.updateTransactionByIndex(idx, record))
-      .then(txn => Ok(txn))
-      .catch(err => Err(err));
+  async createTransaction(record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
+    if (!this.transactionRecords.has(record.id)) {
+      const created = new Transaction(record.id, record.date, record.description, record.postings);
+      this.transactionRecords.set(created.id, created);
+
+      return this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords.values()))
+        .then(() => Promise.resolve(Ok(created)))
+        .catch(err => Promise.reject(err));
+    } else {
+      return Promise.reject(Err(`createTransaction: Transaction already exists: ${record.id}`));
+    }
+  }
+
+  // TODO: what should the return value be? ids of new & updated transactions?
+  async createOrUpdateTransactions(records: Array<TransactionRecord>): Promise<Result<string, string>> {
+    records.forEach(record => {
+      const transaction = new Transaction(record.id, record.date, record.description, record.postings);
+      this.transactionRecords.set(transaction.id, transaction);
+    });
+
+    return this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords.values()))
+      .then(() => Promise.resolve(Ok("ok")))
+      .catch(err => Promise.reject(err));
   }
 
   private async findTransaction(result: Result<string, TransactionRecord[]>, id: string): Promise<number> {
@@ -184,12 +252,33 @@ export class Database {
     }
   }
 
-  private async updateTransactionByIndex(idx: number, record: TransactionRecord): Promise<TransactionRecord> {
-    return new Promise<TransactionRecord>((resolve, reject) => {
-      this.transactionRecords[idx] = new Transaction(record.id, record.date, record.description, record.postings);
-      this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords))
-        .then(() => resolve(this.transactionRecords[idx]))
-        .catch(err => reject(err));
-    });
+  private async unlessTransactionExists(result: Result<string, TransactionRecord[]>, id: string): Promise<boolean> {
+    const idx = result.getOrElse([]).findIndex(element => element.id === id);
+    if (idx === -1) {
+      return Promise.resolve(true);
+    } else {
+      return Promise.reject("Record Exists For Index");
+    }
   }
+
+  // private async updateTransactionById(idx: string, record: TransactionRecord): Promise<TransactionRecord> {
+  //   return new Promise<TransactionRecord>((resolve, reject) => {
+
+
+  //     this.transactionRecords[idx] = new Transaction(record.id, record.date, record.description, record.postings);
+  //     this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords))
+  //       .then(() => resolve(this.transactionRecords[idx]))
+  //       .catch(err => reject(err));
+  //   });
+  // }
+
+  // private async appendTransaction(record: TransactionRecord): Promise<TransactionRecord> {
+  //   return new Promise<TransactionRecord>((resolve, reject) => {
+  //     const txn = new Transaction(record.id, record.date, record.description, record.postings);
+  //     this.transactionRecords.push(txn);
+  //     this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords))
+  //       .then(() => resolve(txn))
+  //       .catch(err => reject(err));
+  //   });
+  // }
 }

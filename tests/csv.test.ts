@@ -4,19 +4,17 @@ import { CSVField } from '../src/server/csv';
 import { CSVSpec } from '../src/server/csv';
 import { Posting } from '../src/server/posting';
 import { NamingRules } from '../src/server/namingRules'
-import { PostingRules } from '../src/server/postingRules'
+import { NamingRule } from '../src/server/namingRule';
 
 test("parses CSV", () => {
   const spec = new CSVSpec(new CSVField("Transaction Date"), new CSVField("Description"), new CSVField("Amount"));
-  const namingRules = new NamingRules(new Map<string, string>());
-  const postingRules = new PostingRules(new Map<string, Array<string>>(), "liabilities:credit cards:amex", AccountType.Credit);
+  const namingRules = new NamingRules([]);
   const account = new Account(
     "bebb6a98-41ee-4a4b-8a7d-0b63fe570c56",
     AccountType.Credit,
     "liabilities:credit cards:amex",
     spec,
-    namingRules,
-    postingRules
+    namingRules
   );
   const data =
     "Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n" +
@@ -41,18 +39,14 @@ test("indexes matching entries", () => {
   const spec = new CSVSpec(new CSVField("Transaction Date"), new CSVField("Description"), new CSVField("Amount"));
   const namingPatterns = new Map<string, string>();
   namingPatterns.set("^AIR FARE", "Budget Airwayze");
-  const namingRules = new NamingRules(namingPatterns);
+  const namingRules = new NamingRules([new NamingRule("Budget Airwayze", ["^AIR FARE"], [new Map<string, string>([["name", "expenses:travel:airfare"]])])]);
 
-  const postingMappings = new Map<string, Array<string>>();
-  postingMappings.set("expenses:travel:airfare", ["Budget Airwayze"]);
-  const postingRules = new PostingRules(postingMappings, "liabilities:credit cards:amex", AccountType.Credit);
   const account = new Account(
     "bebb6a98-41ee-4a4b-8a7d-0b63fe570c56",
     AccountType.Credit,
     "liabilities:credit cards:amex",
     spec,
-    namingRules,
-    postingRules
+    namingRules
   );
   const data =
     "Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n" +

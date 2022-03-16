@@ -1,52 +1,40 @@
 import { mock, instance, when, anyFunction } from 'ts-mockito';
-import { Storage } from '../src/server/storage';
+import { Storage, InMemoryStorage } from '../src/server/storage';
 import { DatabaseManager } from '../src/server/databaseManager';
 
 test("loads the databases on demand", async () => {
-  const mockStorage: Storage = mock();
-  const storage: Storage = instance(mockStorage);
-  when(mockStorage.scan(anyFunction())).thenResolve(['1234.expensive.json', '5678.expensive.json']);
-  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "name": "test123", "journal": "1234.journal", "dataDir": "data/1234" }));
-  when(mockStorage.exists('1234.journal')).thenResolve(true);
+  const storage: Storage = new InMemoryStorage();
+  storage.writePath("1234.expensive.json", JSON.stringify({ "id": "1234", "name": "test123", "journal": "1234.journal", "dataDir": "data/1234", "accounts": [] }));
+  storage.writePath("1234.journal", "");
 
-  const gen = new DatabaseManager(storage).databases();
-  const result = await gen.next();
+  const dbs = await new DatabaseManager(storage).databases();
 
-  expect(result.done).toEqual(false);
-  if (result.done === false) {
-    expect(result.value.id()).toEqual('1234');
-    expect(result.value.name()).toEqual('test123');
-  }
+  expect(dbs.length).toEqual(1);
+  expect(dbs[0].id()).toEqual("1234");
+  expect(dbs[0].name()).toEqual("test123");
 });
 
 test("it omits missing databases", async () => {
   const mockStorage: Storage = mock();
   const storage: Storage = instance(mockStorage);
-  when(mockStorage.scan(anyFunction())).thenResolve(['1234.expensive.json', '5678.expensive.json']);
-  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "name": "test123", "journal": "1234.journal", "dataDir": "data/1234" }));
-  when(mockStorage.readPath('5678.expensive.json')).thenResolve(JSON.stringify({ "name": "test456", "journal": "5678.journal", "dataDir": "data/5678" }));
-  when(mockStorage.exists('1234.journal')).thenResolve(false);
-  when(mockStorage.exists('5678.journal')).thenResolve(true);
+  const results = new Map<string, string>([["1234.expensive.json", "1234"], ["5678.expensive.json", "5678"]]);
+  when(mockStorage.scan(anyFunction())).thenResolve(results);
+  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "id": "1234", "name": "test123", "journal": "1234.journal", "dataDir": "data/1234", "accounts": [] }));
+  when(mockStorage.readPath('5678.expensive.json')).thenResolve(JSON.stringify({ "id": "5678", "name": "test456", "journal": "5678.journal", "dataDir": "data/5678", "accounts": [] }));
+  when(mockStorage.readPath('1234.journal')).thenReject();
+  when(mockStorage.readPath('5678.journal')).thenResolve("");
 
-  const names = new Array<string>();
-  const gen = new DatabaseManager(storage).databases();
-  for await (const db of gen) {
-    names.push(db.name());
-  }
+  const dbs = await new DatabaseManager(storage).databases();
 
-  expect(names).toEqual(['test456']);
+  expect(dbs.map(db => db.name())).toEqual(['test456']);
 });
 
 test("it omits database with bad config", async () => {
-  const mockStorage: Storage = mock();
-  const storage: Storage = instance(mockStorage);
-  when(mockStorage.scan(anyFunction())).thenResolve(['1234.expensive.json']);
-  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "name": "test123", "journal": "1234.journal", "data": 123 }));
+  const storage: Storage = new InMemoryStorage();
+  storage.writePath("1234.expensive.json", JSON.stringify({ "name": "test123", "journal": "1234.journal", "data": 123 }));
 
-  const gen = new DatabaseManager(storage).databases();
-  const result = await gen.next();
-
-  expect(result.done).toEqual(true);
+  const dbs = await new DatabaseManager(storage).databases();
+  expect(dbs.length).toEqual(0);
 });
 
 

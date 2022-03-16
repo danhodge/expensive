@@ -196,6 +196,7 @@ export function parse(input: string): TransactionRecord[] {
 }
 
 // TODO: should this return a Result instead?
+// TODO: there is no way to successfully parse an empty file
 export async function parse2(input: string): Promise<TransactionRecord[]> {
   return new Promise<TransactionRecord[]>((resolve, reject) => {
     const result = hledger().parse(Streams.ofString(input));

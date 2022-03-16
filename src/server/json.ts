@@ -194,9 +194,9 @@ export function array<T>(decoder: Decoder<T>): Decoder<T[]> {
 //   });
 // }
 
-function isMap<K, V>(obj: unknown): obj is Map<K, V> {
-  return obj !== undefined;
-}
+// function isMap<K, V>(obj: unknown): obj is Map<K, V> {
+//   return obj !== undefined;
+// }
 
 export function decodeString<T>(decoder: Decoder<T>, data: string): Result<string, T> {
   return decodeObject(decoder, JSON.parse(data));

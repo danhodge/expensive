@@ -72,9 +72,12 @@ test("record", () => {
 })
 
 test("recordWithComment", () => {
-  const r = record().parse(Streams.ofString("2020-11-17 Some store  ; id:123 \n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
+  const r = record().parse(Streams.ofString("2020-11-17 Some store  ; id:123, raw_desc:Store XYZ 123\n    expenses:food:groceries     $-1.23\n    assets:cash        $1.23\n"));
   expect(r.isAccepted()).toEqual(true);
-  expect(r.value.id).toEqual("123")
+  expect(r.value.id).toEqual("123");
+  expect(r.value.description).toEqual("Some store");
+  // this may be nice to have but I don't think that it's necessary
+  //expect(r.value.rawDescription).toEqual("Store XYZ 123");
 })
 
 test("recordWithNoIdComment", () => {
@@ -151,6 +154,18 @@ test("parse", () => {
 
   const r = parse(data);
   expect(r.length).toEqual(1);
+});
+
+test("file with no transactions", () => {
+  const data = "; journal file\n";
+
+  const r = parse(data);
+  expect(r.length).toEqual(0);
+});
+
+test("empty file", () => {
+  const r = parse("");
+  expect(r.length).toEqual(0);
 });
 
 // test("realData", () => {

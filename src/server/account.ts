@@ -1,16 +1,17 @@
 import { Ok, Err } from 'seidr';
 import { CSVSpec, csvSpecDecoder } from './csv';
-import { Decoder, string, int, field, map5, decode } from "./json"
+import { Decoder, string, field, map5, decode } from "./json"
 import { Posting } from './posting';
 import { NamingRules, namingRulesDecoder } from './namingRules';
 
 function accountTypeDecoder(): Decoder<AccountType> {
   return ((obj: unknown) => {
-    return decode(obj, int(), (val: number) => {
-      if (val in AccountType) {
-        return Ok(val);
+    return decode(obj, string(), (name: string) => {
+      const idx = Object.values(AccountType).indexOf(name);
+      if (idx in AccountType) {
+        return Ok(idx);
       } else {
-        return Err(`${val} is not a valid AccountType`);
+        return Err(`${name} is not a valid AccountType`);
       }
     });
   });
@@ -46,5 +47,15 @@ export class Account {
 
   createPostings(description: string, accountName: string, amountCents: number): Posting[] {
     return this.namingRules.createPostings(description, accountName, amountCents);
+  }
+
+  serialize(): { id: string, type: string | AccountType, accountName: string, csvSpec: CSVSpec, namingRules: unknown } {
+    return {
+      id: this.id,
+      type: Object.values(AccountType)[this.type],
+      accountName: this.accountName,
+      csvSpec: this.csvSpec.serialize(),
+      namingRules: this.namingRules.serialize()
+    };
   }
 }
