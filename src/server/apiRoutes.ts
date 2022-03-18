@@ -8,7 +8,7 @@ export function createRoutes(dbManager: DatabaseManager): Router {
     const db = await dbManager.database(req.params.dbId);
 
     // fetch CSV config from db by accountId & parse CSV data into transactions
-    const txns = db.parseCsv(req.params.accountId, req.body);
+    const txns = await db.parseCsv(req.params.accountId, req.body);
 
     // add transactions to db
     await db.createOrUpdateTransactions(txns);

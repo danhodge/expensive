@@ -142,9 +142,10 @@ export class Database {
   // source account = the account that the money was subtracted from (the credit)
   // destination account = the account that the money was added to (the debit)
 
-  parseCsv(accountId: string, data: string): Transaction[] {
+  async parseCsv(accountId: string, data: string): Promise<Transaction[]> {
     const account = this.config.accountsById.get(accountId);
-    if (account) {
+    console.log(`the account = ${JSON.stringify(account)}`);
+    if (account !== undefined) {
       return parse(data, "", account);
     } else {
       return [];

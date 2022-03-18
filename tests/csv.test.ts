@@ -6,7 +6,7 @@ import { Posting } from '../src/server/posting';
 import { NamingRules } from '../src/server/namingRules'
 import { NamingRule } from '../src/server/namingRule';
 
-test("parses CSV", () => {
+test("parses CSV", async () => {
   const spec = new CSVSpec(new CSVField("Transaction Date"), new CSVField("Description"), new CSVField("Amount"));
   const namingRules = new NamingRules([]);
   const account = new Account(
@@ -21,7 +21,7 @@ test("parses CSV", () => {
     "12/30/2019,12/31/2019,RENTAL CAR,Travel,Sale,-379.71\n" +
     "01/31/2020,01/31/2020,Payment Thank You Bill Pa,,Payment,166.73,";
 
-  const recs = parse(data, "7596f818-f6ea-445f-b702-0c437495f3cc.csv", account);
+  const recs = await parse(data, "7596f818-f6ea-445f-b702-0c437495f3cc.csv", account);
 
   expect(recs.length).toEqual(2);
   expect(recs[0].id).toEqual("97ca19660780de8575f2591f0222b32b");
@@ -35,7 +35,7 @@ test("parses CSV", () => {
   expect(recs[1].postings).toEqual([new Posting(0, "expenses:unclassified", -16673), new Posting(1, "liabilities:credit cards:amex", 16673)])
 });
 
-test("indexes matching entries", () => {
+test("indexes matching entries", async () => {
   const spec = new CSVSpec(new CSVField("Transaction Date"), new CSVField("Description"), new CSVField("Amount"));
   const namingPatterns = new Map<string, string>();
   namingPatterns.set("^AIR FARE", "Budget Airwayze");
@@ -54,7 +54,7 @@ test("indexes matching entries", () => {
     "10/10/2021,10/11/2021,AIR FARE,Travel,Sale,-199.12\n" +
     "10/11/2021,10/13/2021,CAT LITTER 4U,Pets,Sale,-23.12\n";
 
-  const recs = parse(data, "7596f818-f6ea-445f-b702-0c437495f3cc.csv", account);
+  const recs = await parse(data, "7596f818-f6ea-445f-b702-0c437495f3cc.csv", account);
 
   expect(recs.length).toEqual(3);
 
