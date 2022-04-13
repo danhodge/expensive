@@ -56,6 +56,8 @@ export class DatabaseManager {
       }
     }
     const pathsToIds = await this.storage.scan(scanner);
+    // TODO: adding this log statement fixed a bug???
+    console.log(`pathsToIds = ${JSON.stringify(pathsToIds)}`);
     const dbs = new Array<Database>();
 
     for (const [path, id] of pathsToIds.entries()) {
@@ -92,7 +94,7 @@ export class DatabaseManager {
       if (db !== undefined) {
         return db;
       } else {
-        return Promise.reject(`No database found with ${id}`);
+        return Promise.reject(`No database found with id=${id}`);
       }
     });
   }

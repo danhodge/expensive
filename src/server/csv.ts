@@ -117,7 +117,7 @@ export async function parse(data: string, filename: string, account: Account): P
       let record;
       // record is an object with keys for each column and string values for each value - even if the key is not a valid variable name
       while ((record = parser.read())) {
-        const amountCents = Number(record[account.csvSpec.amount.field]) * 100;
+        const amountCents = Math.floor(Number(record[account.csvSpec.amount.field]) * 100);
         const rawDescription = record[account.csvSpec.description.field];
         const date = TransactionDate.parse(record[account.csvSpec.date.field]);
         const canonicalDescription = account.rename(rawDescription);

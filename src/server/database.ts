@@ -3,9 +3,10 @@ import { Maybe, Just, Nothing, Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
 import { parse2, TransactionRecord } from './parser';
 import { Transaction, hledgerTransactionsSerialize } from './transaction';
-import { Decoder, array, string, field, map4 } from "./json";
+import { Decoder, array, string, field, map5, decodeString } from "./json";
 import { Account, accountDecoder } from "./account";
 import { parse, CSVSpec } from "./csv";
+import { NamingRules, namingRulesDecoder } from './namingRules';
 
 export enum DatabaseState {
   New,
@@ -24,6 +25,7 @@ export class DatabaseConfig {
     readonly name: string,
     readonly journal: string,
     readonly dataDir: string,
+    readonly namingRules: string,
     accounts: Array<Account>
   ) {
     this.accountsById = new Map<string, Account>();
@@ -57,11 +59,14 @@ export class DatabaseConfig {
 }
 
 export function dbConfigDecoder(dbId: string): Decoder<DatabaseConfig> {
-  return map4(
-    (name: string, journal: string, dataDir: string, accounts: Array<Account>) => new DatabaseConfig(dbId.toString(), name, journal, dataDir, accounts),
+  return map5(
+    (name: string, journal: string, dataDir: string, namingRules: string, accounts: Array<Account>) => {
+      return new DatabaseConfig(dbId.toString(), name, journal, dataDir, namingRules, accounts)
+    },
     field("name", string()),
     field("journal", string()),
     field("dataDir", string()),
+    field("namingRules", string()),
     field("accounts", array(accountDecoder))
   );
 }
@@ -70,22 +75,33 @@ export class Database {
   state: DatabaseState;
   transactionRecords: Map<string, TransactionRecord>;
 
-  private constructor(readonly config: DatabaseConfig, readonly transactions: TransactionRecord[], readonly storage: Storage) {
+  private constructor(
+    readonly config: DatabaseConfig,
+    readonly transactions: TransactionRecord[],
+    readonly namingRules: NamingRules,
+    readonly storage: Storage) {
     this.storage = storage;
     this.transactionRecords = new Map<string, TransactionRecord>();
     transactions.forEach(txn => this.transactionRecords.set(txn.id, txn));
+    // TODO: should these be here or in the DatabaseConfig?
+    this.namingRules = namingRules;
     this.state = DatabaseState.New;
   }
 
   static async load(config: DatabaseConfig, storage: Storage): Promise<Result<string, Database>> {
-    return storage.readPath(config.journal)
-      .then(data => parse2(data))
-      .then(txns => {
-        return Ok(new Database(config, txns, storage));
+    return Promise.all(
+      [
+        storage.readPath(config.journal).then(data => parse2(data)),
+        storage.readPath(config.namingRules).then(data => decodeString(namingRulesDecoder, data))
+      ]
+    )
+      .then(([txns, rulesResult]) => {
+        return rulesResult.caseOf({
+          Ok: (rules: NamingRules) => Ok(new Database(config, txns, rules, storage)),
+          Err: err => Err(err)
+        });
       })
-      .catch(err => {
-        return Err(err);
-      });
+      .catch(err => { return Err(err) });
   }
 
   // TODO: make this smarter so checkState(Initialized) returns true when state = Loaded
@@ -144,9 +160,8 @@ export class Database {
 
   async parseCsv(accountId: string, data: string): Promise<Transaction[]> {
     const account = this.config.accountsById.get(accountId);
-    console.log(`the account = ${JSON.stringify(account)}`);
     if (account !== undefined) {
-      return parse(data, "", account);
+      return parse(data, "", account, this.namingRules);
     } else {
       return [];
     }
