@@ -44,6 +44,7 @@ export class FileStorage implements Storage {
   // recursion + promises based on: https://medium.com/@wrj111/recursive-promises-in-nodejs-769d0e4c0cf9
   async scan<T>(filter: (path: string) => Maybe<T>): Promise<Map<string, T>> {
     const scanDir = async (path: string) => {
+      console.log(`SCANNING PATH: ${path}`);
       const matches = new Map<string, T>();
       const promises = new Array<Promise<Map<string, T>>>();
 
@@ -64,18 +65,34 @@ export class FileStorage implements Storage {
           }
 
           return Promise.all(promises).then((values) => {
-            const reducer = (val: Map<string, T>, memo: Map<string, T>): Map<string, T> => {
-              // TODO: is there a better/immutable way to merge Maps
-              val.forEach((val, key) => memo.set(key, val));
-              return memo
-            }
+            if (values.length === 0) {
+              return matches;
+            } else {
+              // console.log(`VALUES.SIZE = ${[...values.keys()].length}, MATCHES.SIZE = ${[...matches.keys()].length}`);
+              const reducer = (val: Map<string, T>, memo: Map<string, T>): Map<string, T> => {
+                // TODO: is there a better/immutable way to merge Maps
+                // console.log(`MEMO.SIZE = ${[...memo.keys()].length}`);
+                val.forEach((val, key) => memo.set(key, val));
+                return memo
+              }
 
-            return values.reduce(reducer, matches);
+              return values.reduce(reducer, matches);
+            }
           });
         });
     }
 
+    // TODO: why is this returning an empty Map?
+    // Note: you can call async functions from non-async functions, you just can't use the await keyword, you need to work with the returned Promise directly (https://javascript.info/task/async-from-regular)
     return scanDir(await this.canonicalRootPath());
+  }
+
+  async foo(): Promise<string> {
+    return Promise.resolve("foo");
+  }
+
+  bar(): void {
+    const r = Promise.resolve(this.foo()).then(x => { return x });
   }
 
   // TODO: is there an established pattern for this?
