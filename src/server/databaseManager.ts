@@ -1,4 +1,4 @@
-import { Just, Nothing, Result, Err } from 'seidr';
+import { Just, Nothing, Ok, Result, Err } from 'seidr';
 import { Database, DatabaseConfig, dbConfigDecoder } from './database';
 import { Storage } from './storage';
 import { decodeString } from './json';
@@ -62,10 +62,13 @@ export class DatabaseManager {
 
     for (const [path, id] of pathsToIds.entries()) {
       const configDataBuffer = await this.storage.readPath(path);
-      const dbConfigResult = decodeString(dbConfigDecoder(id), configDataBuffer.toString());
-      (await this.loadDatabase(dbConfigResult)).caseOf({
-        Ok: (db: Database) => dbs.push(db),
-        Err: () => 1
+      const dbConfigResult = decodeString(dbConfigDecoder(id, this.storage), configDataBuffer.toString());
+
+      dbConfigResult.map(async (config: Promise<DatabaseConfig>) => {
+        (await this.loadDatabase(Ok(await config))).caseOf({
+          Ok: (db: Database) => dbs.push(db),
+          Err: () => 1
+        });
       });
 
       // const dbResult =

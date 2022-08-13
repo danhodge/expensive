@@ -1,6 +1,8 @@
 import { Posting } from './posting';
 import { NamingRule, namingRuleDecoder } from './namingRule';
-import { array, map } from './json';
+import { Storage } from './storage';
+import { array, map, Decoder, decodeString } from './json';
+import { Ok, Result } from 'seidr';
 
 const namingRulesDecoder = map(
   (rules: Array<NamingRule>) => new NamingRules(rules),
@@ -8,11 +10,39 @@ const namingRulesDecoder = map(
 );
 export { namingRulesDecoder };
 
+export function namingRulesOrFileDecoder(storage: Storage): Decoder<Promise<NamingRules>> {
+  return ((obj: unknown) => {
+    if (typeof (obj) === 'string') {
+      return Ok(NamingRules.loadOrEmpty(obj as string, storage));
+    } else {
+      // promise-ified version of the namingRulesDecoder - move into a common function?
+      const decoder = map(
+        (rules: Array<NamingRule>) => Promise.resolve(new NamingRules(rules)),
+        array(namingRuleDecoder)
+      );
+      return decoder(obj);
+    }
+  });
+}
+
 export class NamingRules {
   constructor(readonly namingRules: Array<NamingRule>) { }
 
   static empty(): NamingRules {
     return new NamingRules([]);
+  }
+
+  static async load(filename: string, storage: Storage): Promise<Result<string, NamingRules>> {
+    const rules = await storage.readPath(filename);
+    return decodeString(namingRulesDecoder, rules);
+  }
+
+  // TODO: introduced this method because couldn't get the namingRulesOrFileDecoder to work with the result of the load method 
+  static async loadOrEmpty(filename: string, storage: Storage): Promise<NamingRules> {
+    return (await this.load(filename, storage)).caseOf({
+      Ok: rules => rules,
+      Err: () => this.empty()
+    })
   }
 
   serialize(): unknown[] {

@@ -3,10 +3,10 @@ import { Maybe, Just, Nothing, Result, Ok, Err } from 'seidr';
 import { Storage } from './storage';
 import { parse2, TransactionRecord } from './parser';
 import { Transaction, hledgerTransactionsSerialize } from './transaction';
-import { Decoder, array, string, field, map5, decodeString } from "./json";
+import { Decoder, array, string, field, map5 } from "./json";
 import { Account, accountDecoder } from "./account";
 import { parse, CSVSpec } from "./csv";
-import { NamingRules, namingRulesDecoder } from './namingRules';
+import { NamingRules, namingRulesOrFileDecoder } from './namingRules';
 
 export enum DatabaseState {
   New,
@@ -25,13 +25,17 @@ export class DatabaseConfig {
     readonly name: string,
     readonly journal: string,
     readonly dataDir: string,
-    readonly namingRules: string,
+    readonly namingRules: NamingRules,
     accounts: Array<Account>
   ) {
     this.accountsById = new Map<string, Account>();
     accounts.forEach((account: Account) => {
       this.accountsById.set(account.id, account);
     });
+  }
+
+  static async load(id: string, name: string, journal: string, dataDir: string, namingRules: Promise<NamingRules>, accounts: Array<Account>): Promise<DatabaseConfig> {
+    return new DatabaseConfig(id, name, journal, dataDir, await namingRules, accounts);
   }
 
   url(base: string): string {
@@ -58,15 +62,15 @@ export class DatabaseConfig {
   }
 }
 
-export function dbConfigDecoder(dbId: string): Decoder<DatabaseConfig> {
+export function dbConfigDecoder(dbId: string, storage: Storage): Decoder<Promise<DatabaseConfig>> {
   return map5(
-    (name: string, journal: string, dataDir: string, namingRules: string, accounts: Array<Account>) => {
-      return new DatabaseConfig(dbId.toString(), name, journal, dataDir, namingRules, accounts)
+    (name: string, journal: string, dataDir: string, namingRules: Promise<NamingRules>, accounts: Array<Account>) => {
+      return DatabaseConfig.load(dbId.toString(), name, journal, dataDir, namingRules, accounts);
     },
     field("name", string()),
     field("journal", string()),
     field("dataDir", string()),
-    field("namingRules", string()),
+    field("namingRules", namingRulesOrFileDecoder(storage)),
     field("accounts", array(accountDecoder))
   );
 }
@@ -89,17 +93,10 @@ export class Database {
   }
 
   static async load(config: DatabaseConfig, storage: Storage): Promise<Result<string, Database>> {
-    return Promise.all(
-      [
-        storage.readPath(config.journal).then(data => parse2(data)),
-        storage.readPath(config.namingRules).then(data => decodeString(namingRulesDecoder, data))
-      ]
-    )
-      .then(([txns, rulesResult]) => {
-        return rulesResult.caseOf({
-          Ok: (rules: NamingRules) => Ok(new Database(config, txns, rules, storage)),
-          Err: err => Err(err)
-        });
+    return storage.readPath(config.journal)
+      .then(data => parse2(data))
+      .then(txns => {
+        return Ok(new Database(config, txns, config.namingRules, storage));
       })
       .catch(err => { return Err(err) });
   }
@@ -161,7 +158,7 @@ export class Database {
   async parseCsv(accountId: string, data: string): Promise<Transaction[]> {
     const account = this.config.accountsById.get(accountId);
     if (account !== undefined) {
-      return parse(data, "", account, this.namingRules);
+      return parse(data, "", account, this.namingRules)
     } else {
       return [];
     }
