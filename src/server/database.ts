@@ -25,7 +25,7 @@ export class DatabaseConfig {
     readonly name: string,
     readonly journal: string,
     readonly dataDir: string,
-    readonly namingRules: NamingRules,
+    readonly namingRules: NamingRules,  // TODO: keep track of how NamingRules were defined (file or inline) for serialization?
     accounts: Array<Account>
   ) {
     this.accountsById = new Map<string, Account>();
@@ -45,11 +45,12 @@ export class DatabaseConfig {
   }
 
   // TODO: Array<unknown> is a hack, need to define type for Account
-  serialize(): { name: string, journal: string, dataDir: string, accounts: Array<unknown> } {
+  serialize(): { name: string, journal: string, dataDir: string, namingRules: unknown[], accounts: Array<unknown> } {
     return {
       name: this.name,
       journal: this.journal,
       dataDir: this.dataDir,
+      namingRules: this.namingRules.serialize(),
       accounts: Array.from(this.accountsById.values()).map(account => account.serialize())
     };
   }

@@ -22,7 +22,7 @@ test("returns OK", async () => {
   accountRule.set("name", "expenses:pets:food");
   const rules = new NamingRules([new NamingRule("Pet Food", ["^ABC"], [accountRule])]);
   const account = new Account(accountId, AccountType.Credit, "liabilities:credit cards:amex", spec, rules);
-  await dbMgr.createDatabase(new DatabaseConfig(dbId, "testdb", journal, `data/${dbId}`, [account]));
+  await dbMgr.createDatabase(new DatabaseConfig(dbId, "testdb", journal, `data/${dbId}`, rules, [account]));
 
   const app = createApp(createRoutes(dbMgr));
 
