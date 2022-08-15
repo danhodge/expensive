@@ -45,6 +45,10 @@ export class NamingRules {
     })
   }
 
+  isEmpty(): boolean {
+    return this.namingRules.length == 0;
+  }
+
   appendNamingRules(rules: NamingRules) {
     rules.namingRules.forEach(rule => this.namingRules.push(rule));
   }

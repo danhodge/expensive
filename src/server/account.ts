@@ -1,6 +1,6 @@
-import { Ok, Err } from 'seidr';
+import { Ok, Err, Maybe, Nothing, Just } from 'seidr';
 import { CSVSpec, csvSpecDecoder } from './csv';
-import { Decoder, string, field, map5, decode } from "./json"
+import { Decoder, string, field, map5, decode, maybe } from "./json"
 import { Posting } from './posting';
 import { NamingRules, namingRulesDecoder } from './namingRules';
 
@@ -18,12 +18,18 @@ function accountTypeDecoder(): Decoder<AccountType> {
 }
 
 const accountDecoder = map5(
-  (id: string, type: AccountType, accountName: string, csvSpec: CSVSpec, namingRules: NamingRules) => new Account(id, type, accountName, csvSpec, namingRules),
+  (id: string, type: AccountType, accountName: string, csvSpec: CSVSpec, namingRules: Maybe<NamingRules>) => {
+    return namingRules.caseOf({
+      Just: rules => new Account(id, type, accountName, csvSpec, rules),
+      Nothing: () => new Account(id, type, accountName, csvSpec, NamingRules.empty())
+    });
+
+  },
   field("id", string()),
   field("type", accountTypeDecoder()),
   field("accountName", string()),
   field("csvSpec", csvSpecDecoder),
-  field("namingRules", namingRulesDecoder)
+  maybe(field("namingRules", namingRulesDecoder))
 );
 export { accountDecoder };
 
