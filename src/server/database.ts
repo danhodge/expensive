@@ -30,12 +30,14 @@ export class DatabaseConfig {
   ) {
     this.accountsById = new Map<string, Account>();
     accounts.forEach((account: Account) => {
+      account.appendNamingRules(namingRules);
       this.accountsById.set(account.id, account);
     });
   }
 
   static async load(id: string, name: string, journal: string, dataDir: string, namingRules: Promise<NamingRules>, accounts: Array<Account>): Promise<DatabaseConfig> {
-    return new DatabaseConfig(id, name, journal, dataDir, await namingRules, accounts);
+    const globalNamingRules = await namingRules;
+    return Promise.resolve(new DatabaseConfig(id, name, journal, dataDir, globalNamingRules, accounts));
   }
 
   url(base: string): string {
@@ -158,7 +160,7 @@ export class Database {
   async parseCsv(accountId: string, data: string): Promise<Transaction[]> {
     const account = this.config.accountsById.get(accountId);
     if (account !== undefined) {
-      return parse(data, "", account, this.namingRules)
+      return parse(data, "", account);
     } else {
       return [];
     }
@@ -217,7 +219,7 @@ export class Database {
     return this.transactionRecords.values();
   }
 
-  // TODO: it's ok to update a transaction by id but weird since the computed id of the update might not match the actual data 
+  // TODO: it's ok to update a transaction by id but weird since the computed id of the update might not match the actual data
   async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
     if (this.transactionRecords.has(id)) {
       const updated = new Transaction(record.id, record.date, record.description, record.postings);

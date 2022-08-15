@@ -57,38 +57,37 @@ export class DatabaseManager {
     }
     const pathsToIds = await this.storage.scan(scanner);
     // TODO: adding this log statement fixed a bug???
-    console.log(`pathsToIds = ${JSON.stringify(pathsToIds)}`);
+    console.log(`pathsToIds = ${pathsToIds.size}, ${[...pathsToIds.keys()]}`);
     const dbs = new Array<Database>();
 
     for (const [path, id] of pathsToIds.entries()) {
       const configDataBuffer = await this.storage.readPath(path);
       const dbConfigResult = decodeString(dbConfigDecoder(id, this.storage), configDataBuffer.toString());
 
-      dbConfigResult.map(async (config: Promise<DatabaseConfig>) => {
+      const config = dbConfigResult.getOrElse(null);
+      if (config !== null && config !== undefined) {
         (await this.loadDatabase(Ok(await config))).caseOf({
           Ok: (db: Database) => dbs.push(db),
           Err: () => 1
         });
-      });
+      }
+      //   // const dbResult =
+      //   //   await this.storage
+      //   //     .readPath(entry[0])  // TODO: is there a way to destructure this?
+      //   //     .then(buffer => {
+      //   //       return decodeString(dbConfigDecoder(entry[1]), buffer.toString())
+      //   //         .map(config => Database.load(config, this.storage));
+      //   //     });
 
-      // const dbResult =
-      //   await this.storage
-      //     .readPath(entry[0])  // TODO: is there a way to destructure this?
-      //     .then(buffer => {
-      //       return decodeString(dbConfigDecoder(entry[1]), buffer.toString())
-      //         .map(config => Database.load(config, this.storage));
-      //     });
-
-      // // TODO: can this be tacked onto the map above?
-      // const db = dbResult.getOrElse(null);
-      // if (db !== undefined && db !== null) {
-      //   if (await db.checkState(DatabaseState.Initialized)) {
-      //     dbs.push(db);
-      //   }
-      // }
+      //   // // TODO: can this be tacked onto the map above?
+      //   // const db = dbResult.getOrElse(null);
+      //   // if (db !== undefined && db !== null) {
+      //   //   if (await db.checkState(DatabaseState.Initialized)) {
+      //   //     dbs.push(db);
+      //   //   }
+      //   // }
     }
-
-    return Promise.resolve(dbs);
+    return dbs;
   }
 
   async database(id: string): Promise<Database> {

@@ -37,12 +37,16 @@ export class NamingRules {
     return decodeString(namingRulesDecoder, rules);
   }
 
-  // TODO: introduced this method because couldn't get the namingRulesOrFileDecoder to work with the result of the load method 
+  // TODO: introduced this method because couldn't get the namingRulesOrFileDecoder to work with the result of the load method
   static async loadOrEmpty(filename: string, storage: Storage): Promise<NamingRules> {
     return (await this.load(filename, storage)).caseOf({
       Ok: rules => rules,
       Err: () => this.empty()
     })
+  }
+
+  appendNamingRules(rules: NamingRules) {
+    rules.namingRules.forEach(rule => this.namingRules.push(rule));
   }
 
   serialize(): unknown[] {

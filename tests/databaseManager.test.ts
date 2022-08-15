@@ -4,8 +4,22 @@ import { DatabaseManager } from '../src/server/databaseManager';
 
 test("loads the databases on demand", async () => {
   const storage: Storage = new InMemoryStorage();
-  storage.writePath("1234.expensive.json", JSON.stringify({ "id": "1234", "name": "test123", "journal": "1234.journal", "dataDir": "data/1234", "accounts": [] }));
-  storage.writePath("1234.journal", "");
+  const namingRule = {
+    "description": "Desc",
+    "patterns": ["PAT"],
+    "accounts": [{ "name": "expenses" }]
+  };
+  const config = {
+    "id": "1234",
+    "name": "test123",
+    "journal": "1234.journal",
+    "dataDir": "data/1234",
+    "namingRules": [namingRule],
+    "accounts": []
+  }
+
+  storage.writePath("1234.expensive.json", JSON.stringify(config));
+  storage.writePath("1234.journal", "; empty file\n");
 
   const dbs = await new DatabaseManager(storage).databases();
 
@@ -19,8 +33,8 @@ test("it omits missing databases", async () => {
   const storage: Storage = instance(mockStorage);
   const results = new Map<string, string>([["1234.expensive.json", "1234"], ["5678.expensive.json", "5678"]]);
   when(mockStorage.scan(anyFunction())).thenResolve(results);
-  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "id": "1234", "name": "test123", "journal": "1234.journal", "dataDir": "data/1234", "accounts": [] }));
-  when(mockStorage.readPath('5678.expensive.json')).thenResolve(JSON.stringify({ "id": "5678", "name": "test456", "journal": "5678.journal", "dataDir": "data/5678", "accounts": [] }));
+  when(mockStorage.readPath('1234.expensive.json')).thenResolve(JSON.stringify({ "id": "1234", "name": "test123", "journal": "1234.journal", "dataDir": "data/1234", "namingRules": "data/rules", "accounts": [] }));
+  when(mockStorage.readPath('5678.expensive.json')).thenResolve(JSON.stringify({ "id": "5678", "name": "test456", "journal": "5678.journal", "dataDir": "data/5678", "namingRules": "data/rules", "accounts": [] }));
   when(mockStorage.readPath('1234.journal')).thenReject();
   when(mockStorage.readPath('5678.journal')).thenResolve("");
 

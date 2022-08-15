@@ -41,6 +41,10 @@ export class Account {
   ) {
   }
 
+  appendNamingRules(namingRules: NamingRules) {
+    this.namingRules.appendNamingRules(namingRules);
+  }
+
   rename(description: string): string {
     return this.namingRules.rename(description);
   }
