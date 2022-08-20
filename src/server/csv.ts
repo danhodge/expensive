@@ -108,7 +108,7 @@ export class CSVRecord {
 }
 
 export async function parse(data: string, filename: string, account: Account): Promise<Transaction[]> {
-  const parser = csvParse({ columns: true, relax_column_count: true });
+  const parser = csvParse({ columns: true, relax_column_count: true, skip_empty_lines: true });
   const records = new Array<Transaction>();
 
   return new Promise<Transaction[]>(resolve => {
@@ -137,6 +137,10 @@ export async function parse(data: string, filename: string, account: Account): P
 
     parser.on("end", () => {
       resolve(records);
+    });
+
+    parser.on("error", (err) => {
+      console.log(`CSV parse error: ${err.message}`);
     });
 
     parser.write(data);

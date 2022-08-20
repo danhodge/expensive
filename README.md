@@ -24,3 +24,8 @@ npx jest -i <path_to_test_file> -t <test_name>
 # Start Server
 npm run start:wp
 ```
+
+``` bash
+# Posting a transactions CSV
+curl -X POST -H "Content-Type: text/csv" --data-binary @file.csv http://localhost:3000/api/$DB_ID/upload/$ACCOUNT_ID
+```
