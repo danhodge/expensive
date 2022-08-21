@@ -6,6 +6,7 @@ import { Transaction, hledgerTransactionsSerialize } from './transaction';
 import { Decoder, array, string, field, map5 } from "./json";
 import { Account, accountDecoder } from "./account";
 import { parse, CSVSpec } from "./csv";
+import { v4 as uuidv4 } from 'uuid';
 import { NamingRules, namingRulesOrFileDecoder } from './namingRules';
 
 export enum DatabaseState {
@@ -165,6 +166,17 @@ export class Database {
     } else {
       return [];
     }
+  }
+
+  async storeCsv(accountId: string, csvData: string): Promise<Result<string, string>> {
+    const header = `// ${JSON.stringify({ accountId: accountId })}`;
+    const id = uuidv4();
+    const path = [this.config.dataDir, `${id}.csv`].join("/")
+
+    return this.storage
+      .writePath(path, [header, csvData].join("\n"))
+      .then(() => Ok(id))
+      .catch(err => Err(err));
   }
 
   // parseCsv(data: string): Transaction[] {

@@ -1,6 +1,6 @@
-import { open, readdir, realpath, stat, unlink, FileHandle } from 'fs/promises';
+import { mkdir, open, readdir, realpath, stat, unlink, FileHandle } from 'fs/promises';
 import { flock } from 'fs-ext';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { Maybe } from 'seidr';
 
 export interface Storage {
@@ -137,6 +137,7 @@ export class FileStorage implements Storage {
 
     try {
       const fullPath = await this.toFullPath(path);
+      await mkdir(dirname(fullPath), { recursive: true });
       const openHandle = await open(fullPath, "w");
       handle = openHandle;
       await this.lockFile(openHandle, "ex", () => openHandle.write(data));
