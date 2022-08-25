@@ -159,16 +159,18 @@ export class Database {
   // source account = the account that the money was subtracted from (the credit)
   // destination account = the account that the money was added to (the debit)
 
-  async parseCsv(accountId: string, data: string): Promise<Transaction[]> {
+  async parseCsv(accountId: string, data: string, importId: string): Promise<Transaction[]> {
     const account = this.config.accountsById.get(accountId);
     if (account !== undefined) {
-      return parse(data, "", account);
+      return parse(data, importId, account);
     } else {
       return [];
     }
   }
 
+
   async storeCsv(accountId: string, csvData: string): Promise<Result<string, string>> {
+    // TODO: include timestamp in header
     const header = `// ${JSON.stringify({ accountId: accountId })}`;
     const id = uuidv4();
     const path = [this.config.dataDir, `${id}.csv`].join("/")
@@ -235,7 +237,7 @@ export class Database {
   // TODO: it's ok to update a transaction by id but weird since the computed id of the update might not match the actual data
   async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
     if (this.transactionRecords.has(id)) {
-      const updated = new Transaction(record.id, record.date, record.description, record.postings);
+      const updated = new Transaction(record.id, record.date, record.description, record.postings, record.importId);
       this.transactionRecords.set(id, updated);
 
       return this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords.values()))
@@ -248,7 +250,7 @@ export class Database {
 
   async createTransaction(record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
     if (!this.transactionRecords.has(record.id)) {
-      const created = new Transaction(record.id, record.date, record.description, record.postings);
+      const created = new Transaction(record.id, record.date, record.description, record.postings, record.importId);
       this.transactionRecords.set(created.id, created);
 
       return this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords.values()))
@@ -262,7 +264,7 @@ export class Database {
   // TODO: what should the return value be? ids of new & updated transactions?
   async createOrUpdateTransactions(records: Array<TransactionRecord>): Promise<Result<string, string>> {
     records.forEach(record => {
-      const transaction = new Transaction(record.id, record.date, record.description, record.postings);
+      const transaction = new Transaction(record.id, record.date, record.description, record.postings, record.importId);
       this.transactionRecords.set(transaction.id, transaction);
     });
 

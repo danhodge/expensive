@@ -12,7 +12,7 @@ export function createRoutes(dbManager: DatabaseManager): Router {
       (await db.storeCsv(req.params.accountId, req.body)).caseOf({
         Ok: async importId => {
           // fetch CSV config from db by accountId & parse CSV data into transactions
-          const txns = await db.parseCsv(req.params.accountId, req.body);
+          const txns = await db.parseCsv(req.params.accountId, req.body, importId);
 
           // add transactions to db
           await db.createOrUpdateTransactions(txns);

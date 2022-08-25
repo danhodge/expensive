@@ -14,6 +14,7 @@ interface CommentLine {
 
 export interface TransactionRecord {
   id: string
+  importId?: string
   date: TransactionDate
   description: string
   postings: Posting[]

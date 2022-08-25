@@ -33,8 +33,14 @@ export function hledgedPostingSerialize(maxCategoryLen: number): (p: Posting) =>
 
 export function hledgerTransactionSerialize(record: Transaction): string {
   const maxCategoryLen = Math.max(...record.postings.map(p => p.category.length));
+  const tags = [["id", record.id]];
+  if (record.importId) {
+    tags.push(["importId", record.importId]);
+  }
+  const tagStr = tags.map(([k, v]) => `${k}:${v}`).join(", ");
+
   return [
-    `${record.date} ${record.description}  ; id:${record.id}`
+    `${record.date} ${record.description}  ; ${tagStr}`
   ].concat(record.postings.map(hledgedPostingSerialize(maxCategoryLen))).join("\n")
 }
 
@@ -47,5 +53,6 @@ export class Transaction implements TransactionRecord {
     readonly id: string,
     readonly date: TransactionDate,
     readonly description: string,
-    readonly postings: Posting[]) { }
+    readonly postings: Posting[],
+    readonly importId?: string) { }
 }

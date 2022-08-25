@@ -107,7 +107,7 @@ export class CSVRecord {
   }
 }
 
-export async function parse(data: string, filename: string, account: Account): Promise<Transaction[]> {
+export async function parse(data: string, importId: string, account: Account): Promise<Transaction[]> {
   const parser = csvParse({ columns: true, relax_column_count: true, skip_empty_lines: true, comment: "//" });
   const records = new Array<Transaction>();
 
@@ -128,7 +128,8 @@ export async function parse(data: string, filename: string, account: Account): P
           Md5.hashStr(idMaterial),
           TransactionDate.parse(record[account.csvSpec.date.field]),
           canonicalDescription,
-          account.createPostings(rawDescription, account.accountName, amountCents)
+          account.createPostings(rawDescription, account.accountName, amountCents),
+          importId
         );
 
         records.push(txn);
