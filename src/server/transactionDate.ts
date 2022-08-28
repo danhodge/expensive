@@ -8,6 +8,11 @@ export class TransactionDate {
     return new TransactionDate(parseInt(year), parseInt(month), parseInt(date));
   }
 
+  static parseISO(value: string): TransactionDate {
+    const [year, month, date] = value.split("-");
+    return new TransactionDate(parseInt(year), parseInt(month), parseInt(date));
+  }
+
   constructor(readonly year: number, readonly month: number, readonly date: number) { }
 
   toString(): string {
@@ -24,7 +29,7 @@ export function transactionDate(): Decoder<TransactionDate> {
     return string()(obj).caseOf({
       Err: err => Err(err),
       Ok: str => {
-        return Ok(TransactionDate.parse(str));
+        return Ok(TransactionDate.parseISO(str));
       }
     });
   });
