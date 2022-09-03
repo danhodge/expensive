@@ -109,10 +109,20 @@ function recordDesc(): SingleParser<[TransactionDate, string, string?]> {
     .map(tuple => [tuple.at(0), tuple.at(1), tuple.at(2)]);
 }
 
+function extractTags(tagsStr: string): Map<string, string> {
+  const tags = new Map<string, string>();
+  tagsStr.split(",").forEach((tag) => {
+    const [k, v] = tag.split(":");
+    tags.set(k.trim(), v);
+  });
+
+  return tags;
+}
+
 function extractId(idGen: IdGenerator, tagsStr: string): string {
-  const idTag = tagsStr.split(",").find(v => v.includes("id:"));
-  if (idTag) {
-    return idTag.split(":")[1].trim();
+  const idValue = extractTags(tagsStr).get("id");
+  if (idValue) {
+    return idValue;
   } else {
     return idGen.id();
   }
@@ -127,7 +137,13 @@ export function record(idGen: IdGenerator = new IdGenerator()): SingleParser<Tra
         return new Posting(idx, posting.category, posting.amountCents)
       });
 
-      return new Transaction(tuple.at(0)[2].map((str: string) => extractId(idGen, str)).orElse(idGen.id()), tuple.at(0)[0] as TransactionDate, tuple.at(0)[1], postings);
+      return new Transaction(
+        tuple.at(0)[2].map((str: string) => extractId(idGen, str)).orElse(idGen.id()),
+        tuple.at(0)[0] as TransactionDate,
+        tuple.at(0)[1],
+        postings,
+        tuple.at(0)[2].map((str: string) => extractTags(str).get("import_id")).orElse(undefined),
+      );
     });
 }
 

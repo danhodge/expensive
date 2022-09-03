@@ -236,8 +236,9 @@ export class Database {
 
   // TODO: it's ok to update a transaction by id but weird since the computed id of the update might not match the actual data
   async updateTransaction(id: string, record: TransactionRecord): Promise<Result<string, TransactionRecord>> {
-    if (this.transactionRecords.has(id)) {
-      const updated = new Transaction(record.id, record.date, record.description, record.postings, record.importId);
+    const curRecord = this.transactionRecords.get(id);
+    if (curRecord !== null && curRecord !== undefined) {
+      const updated = new Transaction(record.id, record.date, record.description, record.postings, (record.importId || curRecord.importId));
       this.transactionRecords.set(id, updated);
 
       return this.storage.writePath(this.config.journal, hledgerTransactionsSerialize(this.transactionRecords.values()))

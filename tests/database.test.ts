@@ -5,6 +5,7 @@ import { Database, DatabaseConfig } from '../src/server/database';
 import { Posting } from '../src/server/posting';
 import { Transaction } from '../src/server/transaction';
 import { TransactionDate } from '../src/server/transactionDate';
+import { NamingRules } from '../src/server/namingRules';
 
 async function withValidDb(config: DatabaseConfig, storage: Storage, fn: (db: Database) => void) {
   const dbResult = await Database.load(config, storage);
@@ -16,7 +17,7 @@ async function withValidDb(config: DatabaseConfig, storage: Storage, fn: (db: Da
 
 test("successfully loads transactions from storage", async () => {
   const path = "file.journal";
-  const config = new DatabaseConfig("123", "test", path, "dataDir", []);
+  const config = new DatabaseConfig("123", "test", path, "dataDir", new NamingRules([]), []);
   const data = readFileSync("tests/fixtures/single_transaction.journal");
   const storage: Storage = new InMemoryStorage();
   storage.writePath(path, data.toString());
@@ -26,7 +27,7 @@ test("successfully loads transactions from storage", async () => {
 
 test("fails to load transactions from storage", async () => {
   const path = "file.journal";
-  const config = new DatabaseConfig("123", "test", path, "dataDir", []);
+  const config = new DatabaseConfig("123", "test", path, "dataDir", new NamingRules([]), []);
   const mockStorage: Storage = mock();
   const storage: Storage = instance(mockStorage);
   when(mockStorage.readPath(path)).thenReject(new Error("Problem"));
@@ -40,7 +41,7 @@ test("fails to load transactions from storage", async () => {
 
 test("fails to parse transactions from storage", async () => {
   const path = "file.journal";
-  const config = new DatabaseConfig("123", "test", path, "dataDir", []);
+  const config = new DatabaseConfig("123", "test", path, "dataDir", new NamingRules([]), []);
   const storage: Storage = new InMemoryStorage();
   storage.writePath(path, "INVALID DATA");
 
@@ -53,7 +54,7 @@ test("fails to parse transactions from storage", async () => {
 
 test("successfully writes new transaction to storage", async () => {
   const path = "file.journal";
-  const config = new DatabaseConfig("123", "test", path, "dataDir", []);
+  const config = new DatabaseConfig("123", "test", path, "dataDir", new NamingRules([]), []);
   const storage: Storage = new InMemoryStorage();
   storage.writePath(path, readFileSync("tests/fixtures/single_transaction.journal").toString());
 
@@ -82,7 +83,7 @@ test("successfully writes new transaction to storage", async () => {
 
 test("successfully write updates to storage", async () => {
   const path = "file.journal";
-  const config = new DatabaseConfig("123", "test", path, "dataDir", []);
+  const config = new DatabaseConfig("123", "test", path, "dataDir", new NamingRules([]), []);
   const data = readFileSync("tests/fixtures/single_transaction.journal");
   const storage: Storage = new InMemoryStorage();
   storage.writePath(path, data.toString());
@@ -103,7 +104,11 @@ test("successfully write updates to storage", async () => {
         fail("Expected success");
       },
       Ok: async txn => {
-        expect(txn).toEqual(rec);
+        expect(txn.id).toEqual(rec.id);
+        expect(txn.date).toEqual(rec.date);
+        expect(txn.description).toEqual(rec.description);
+        expect(txn.postings).toEqual(rec.postings);
+        expect(txn.importId).toEqual("678");
         //expect(await storage.readPath(path)).toEqual("stuff");
       }
     });

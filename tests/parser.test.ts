@@ -34,10 +34,10 @@ test("nonNewlineWhitespace1 no whitespace characters", () => {
 });
 
 test("posting", () => {
-  const r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23  ; id:123\n"));
+  const r = posting().parse(Streams.ofString("\texpenses:food:fast food       $-1.23  ; id:123, import_id:456\n"));
   expect(r.isAccepted()).toEqual(true);
   // TODO: stop passing the comment into the Posting as the index
-  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, index: "id:123" });
+  expect(r.value).toEqual({ category: "expenses:food:fast food", amountCents: -123, index: "id:123, import_id:456" });
 });
 
 test("blankLine", () => {
